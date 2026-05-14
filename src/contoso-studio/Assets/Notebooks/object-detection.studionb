@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "Object Detection Dataset",
+  "description": "Run a video through YOLOS object detection on the NPU to produce annotated frames and per-frame detections.",
+  "steps": [
+    {
+      "id": "detect-objects",
+      "options": {
+        "ConfidenceThreshold": 0.5,
+        "SampleFrameCount": 60,
+        "HardwarePreference": "Auto"
+      }
+    }
+  ]
+}

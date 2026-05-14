@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "VideoStudio (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "VideoStudio (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

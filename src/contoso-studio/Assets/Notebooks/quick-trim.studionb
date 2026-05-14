@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "Quick Trim",
+  "description": "Detect silent regions and produce a tightly cut version of the input — great for cleaning up raw recordings.",
+  "steps": [
+    {
+      "id": "detect-silence",
+      "options": {
+        "SilenceThresholdDb": -40,
+        "MinSilenceMs": 500,
+        "SilencePadMs": 200
+      }
+    },
+    {
+      "id": "smart-cut",
+      "options": { "MinKeepMs": 200 }
+    }
+  ]
+}

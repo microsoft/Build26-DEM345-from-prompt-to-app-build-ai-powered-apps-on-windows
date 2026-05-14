@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="VideoStudio.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:VideoStudio">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Contoso Studio Brand Colors -->
+            <Color x:Key="TealPrimary">#0E8A7E</Color>
+            <Color x:Key="TealHover">#0B6E65</Color>
+            <Color x:Key="TealLight">#D1F5F0</Color>
+            <Color x:Key="ContainerOrange">#E87D2F</Color>
+            <Color x:Key="ContainerOrangeLight">#FFF0E0</Color>
+            <Color x:Key="NativeTeal">#0E8A7E</Color>
+
+            <SolidColorBrush x:Key="AccentTealBrush" Color="{StaticResource TealPrimary}"/>
+            <SolidColorBrush x:Key="AccentTealHoverBrush" Color="{StaticResource TealHover}"/>
+            <SolidColorBrush x:Key="AccentTealLightBrush" Color="{StaticResource TealLight}"/>
+            <SolidColorBrush x:Key="ContainerBadgeBrush" Color="{StaticResource ContainerOrange}"/>
+            <SolidColorBrush x:Key="ContainerBadgeLightBrush" Color="{StaticResource ContainerOrangeLight}"/>
+            <SolidColorBrush x:Key="NativeBadgeBrush" Color="{StaticResource NativeTeal}"/>
+
+            <!-- Panel backgrounds -->
+            <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#1A1A1A" />
+            <SolidColorBrush x:Key="PanelBorderBrush" Color="#2A2A2A" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

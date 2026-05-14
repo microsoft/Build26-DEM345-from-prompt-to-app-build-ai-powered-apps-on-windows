@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="VideoStudio.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:VideoStudio"
+    xmlns:models="using:VideoStudio.Models"
+    xmlns:controls="using:VideoStudio.Controls"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title=""
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- TitleBar with action buttons -->
+            <RowDefinition Height="*"/>     <!-- Main content -->
+            <RowDefinition Height="Auto"/>  <!-- Status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Custom Title Bar with integrated action buttons -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="48" Padding="12,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- App icon + title -->
+            <FontIcon Grid.Column="0" Glyph="&#xE714;" FontSize="16"
+                      Foreground="{StaticResource AccentTealBrush}"
+                      VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <TextBlock Grid.Column="1" Text="Contoso Studio"
+                       Style="{ThemeResource CaptionTextBlockStyle}"
+                       VerticalAlignment="Center" FontWeight="SemiBold"/>
+
+            <!-- Action buttons in title bar -->
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2"
+                        VerticalAlignment="Center">
+                <Button x:Name="RunAllButton" Click="RunAllButton_Click"
+                        ToolTipService.ToolTip="Run All Steps"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE768;" FontSize="14"
+                                  Foreground="{StaticResource AccentTealBrush}"/>
+                        <TextBlock Text="Run All" FontSize="12"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="StopButton" Click="StopButton_Click"
+                        ToolTipService.ToolTip="Stop Execution"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <FontIcon Glyph="&#xE71A;" FontSize="14"/>
+                </Button>
+                <Border Width="1" Height="20" Margin="4,0"
+                        Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                <Button x:Name="NotebookButton"
+                        ToolTipService.ToolTip="Notebook (Open / Save / Templates)"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE7C3;" FontSize="14"/>
+                        <TextBlock Text="Notebook" FontSize="12" VerticalAlignment="Center"/>
+                        <FontIcon Glyph="&#xE70D;" FontSize="10" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem Text="New (Clear pipeline)"
+                                            Click="NotebookNew_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE7C3;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Open notebook…"
+                                            Click="NotebookOpen_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE8E5;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutItem Text="Save notebook as…"
+                                            Click="NotebookSave_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE74E;"/>
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                            <MenuFlyoutSeparator/>
+                            <MenuFlyoutSubItem Text="Templates"
+                                               x:Name="NotebookTemplatesMenu">
+                                <MenuFlyoutSubItem.Icon>
+                                    <FontIcon Glyph="&#xE8A5;"/>
+                                </MenuFlyoutSubItem.Icon>
+                            </MenuFlyoutSubItem>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Border Width="1" Height="20" Margin="4,0"
+                        Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                <Button Click="ImportButton_Click"
+                        ToolTipService.ToolTip="Import Video"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <FontIcon Glyph="&#xE8E5;" FontSize="14"/>
+                </Button>
+                <Button Click="OpenOutputButton_Click"
+                        ToolTipService.ToolTip="Open Output Folder"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <FontIcon Glyph="&#xE838;" FontSize="14"/>
+                </Button>
+                <Border Width="1" Height="20" Margin="4,0"
+                        Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                <Button x:Name="BatchButton" Click="BatchButton_Click"
+                        ToolTipService.ToolTip="Batch run notebook over multiple files"
+                        Padding="8,4" Background="Transparent" BorderThickness="0">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE8B7;" FontSize="14"
+                                  Foreground="{StaticResource AccentTealBrush}"/>
+                        <TextBlock Text="Batch" FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Row 1: Two-column main content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT: Sidebar (Sources + Effects) -->
+            <Border Grid.Column="0"
+                    Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="14,12">
+                    <StackPanel Spacing="16">
+
+                        <!-- SOURCES section -->
+                        <StackPanel Spacing="8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="SOURCES" Style="{ThemeResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Content="+ Import" Padding="8,4"
+                                        FontSize="12" Click="SidebarImportButton_Click"/>
+                            </Grid>
+
+                            <ListView x:Name="SourcesListView"
+                                      SelectionMode="Single"
+                                      SelectionChanged="SourcesListView_SelectionChanged"
+                                      CanDragItems="True"
+                                      DragItemsStarting="SourcesListView_DragItemsStarting"
+                                      MaxHeight="200"/>
+
+                            <TextBlock x:Name="NoSourcesText"
+                                       Text="Import a video to get started"
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       FontStyle="Italic"/>
+                        </StackPanel>
+
+                        <!-- Divider -->
+                        <Border Height="1" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+
+                        <!-- EFFECTS section -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="EFFECTS" Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       FontWeight="SemiBold"/>
+
+                            <TextBlock Text="🐧 CONTAINER" FontSize="11"
+                                       Visibility="Collapsed"
+                                       Foreground="{StaticResource ContainerBadgeBrush}"
+                                       FontWeight="SemiBold" Margin="0,4,0,0"/>
+                            <StackPanel x:Name="ContainerEffectsPanel" Visibility="Collapsed" Spacing="4"/>
+
+                            <TextBlock Text="🧠 NATIVE AI" FontSize="11"
+                                       Foreground="{StaticResource AccentTealBrush}"
+                                       FontWeight="SemiBold" Margin="0,4,0,0"/>
+                            <StackPanel x:Name="NativeEffectsPanel" Spacing="4"/>
+
+                            <TextBlock Text="Click to add, or drag onto the pipeline"
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       FontStyle="Italic" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- RIGHT: Pipeline Canvas -->
+            <ScrollViewer Grid.Column="1"
+                          x:Name="PipelineScroller"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Auto"
+                          HorizontalScrollMode="Enabled"
+                          Padding="24,16"
+                          AllowDrop="True"
+                          DragOver="PipelineCanvas_DragOver"
+                          Drop="PipelineCanvas_Drop">
+                <Canvas x:Name="StepsPanel" MinHeight="100" MinWidth="600"/>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Row 3: Status Bar -->
+        <Border Grid.Row="2" Height="32"
+                Background="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock x:Name="StatusBarText" Grid.Column="0"
+                           VerticalAlignment="Center" FontSize="11"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                <!-- CPU -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" Margin="8,0">
+                    <TextBlock Text="CPU" FontSize="10"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <controls:SparklineChart x:Name="CpuSparkline" Width="60" Height="20" MaxValue="100"/>
+                    <TextBlock x:Name="CpuValueText" FontSize="10" Width="30"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- GPU -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" Margin="8,0">
+                    <TextBlock Text="GPU" FontSize="10"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <controls:SparklineChart x:Name="GpuSparkline" Width="60" Height="20" MaxValue="100"/>
+                    <TextBlock x:Name="GpuValueText" FontSize="10" Width="30"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- NPU -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" Margin="8,0">
+                    <TextBlock Text="NPU" FontSize="10"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <controls:SparklineChart x:Name="NpuSparkline" Width="60" Height="20" MaxValue="100"/>
+                    <TextBlock x:Name="NpuValueText" FontSize="10" Width="30"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- Memory -->
+                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4"
+                            VerticalAlignment="Center" Margin="8,0">
+                    <TextBlock Text="MEM" FontSize="10"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="MemValueText" FontSize="10" Width="46"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Batch overlay panel (Phase 8.7). Toggled by the title-bar Batch button. -->
+        <Border x:Name="BatchOverlay" Grid.Row="1"
+                Visibility="Collapsed"
+                Background="#B0000000"
+                Canvas.ZIndex="100">
+            <Border MaxWidth="900" MaxHeight="700"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="8" Padding="20">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Batch Run"
+                                       Style="{ThemeResource SubtitleTextBlockStyle}"/>
+                            <TextBlock Text="Run the current notebook over multiple input files. Outputs are captured per file in the matrix below."
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Click="BatchClose_Click"
+                                x:Name="BatchCloseButton"
+                                AutomationProperties.AutomationId="BatchCloseButton"
+                                AutomationProperties.Name="Close batch overlay"
+                                Background="Transparent" BorderThickness="0">
+                            <FontIcon Glyph="&#xE711;" FontSize="14"/>
+                        </Button>
+                    </Grid>
+
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                        <Button Click="BatchAddFiles_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE710;" FontSize="12"/>
+                                <TextBlock Text="Add files…"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Click="BatchClear_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE74D;" FontSize="12"/>
+                                <TextBlock Text="Clear"/>
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="BatchRunButton" Click="BatchRun_Click"
+                                Background="{StaticResource AccentTealBrush}"
+                                Foreground="White">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE768;" FontSize="12" Foreground="White"/>
+                                <TextBlock Text="Run Batch"/>
+                            </StackPanel>
+                        </Button>
+                        <ProgressRing x:Name="BatchProgressRing" IsActive="False"
+                                      Width="20" Height="20"
+                                      VerticalAlignment="Center"/>
+                        <TextBlock x:Name="BatchStatusText"
+                                   VerticalAlignment="Center"
+                                   Style="{ThemeResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="2"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="8">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="QUEUED FILES" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <ListView ItemsSource="{x:Bind PipelineVM.BatchSources, Mode=OneWay}"
+                                      MaxHeight="120"
+                                      SelectionMode="None">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:MediaFile">
+                                        <Grid Padding="4,2">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <FontIcon Glyph="&#xE714;" FontSize="12"
+                                                      Foreground="{StaticResource AccentTealBrush}"
+                                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <TextBlock Grid.Column="1" Text="{x:Bind FileName}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="3"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="4" Padding="8">
+                        <Grid RowSpacing="4">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="RESULTS" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                <ListView ItemsSource="{x:Bind PipelineVM.BatchResults, Mode=OneWay}"
+                                          SelectionMode="None">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:BatchSourceResult">
+                                            <Expander HorizontalAlignment="Stretch"
+                                                      HorizontalContentAlignment="Stretch"
+                                                      Margin="0,2">
+                                                <Expander.Header>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="32"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="{x:Bind Index}" FontWeight="SemiBold"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind Source.FileName}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="2" Text="{x:Bind Status, Mode=OneWay}"
+                                                                   FontSize="11" Margin="8,0"
+                                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="3" Text="{x:Bind ElapsedMs, Mode=OneWay}"
+                                                                   FontSize="10" Margin="8,0,0,0"
+                                                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Expander.Header>
+                                                <ItemsControl ItemsSource="{x:Bind Outputs}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:BatchOutputCell">
+                                                            <Grid Padding="0,2">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="160"/>
+                                                                    <ColumnDefinition Width="100"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Text="{x:Bind StepName}" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{x:Bind PinId}" FontSize="11"
+                                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                                <TextBlock Grid.Column="2" Text="{x:Bind Summary}" FontSize="11"
+                                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="4"
+                               Text="Tip: build your notebook in the canvas first, then add files here and click Run Batch."
+                               FontStyle="Italic"
+                               Style="{ThemeResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                </Grid>
+            </Border>
+        </Border>
+    </Grid>
+</Window>

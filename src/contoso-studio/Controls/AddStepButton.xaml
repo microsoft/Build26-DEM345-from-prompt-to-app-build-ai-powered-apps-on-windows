@@ -1,0 +1,36 @@
+<UserControl
+    x:Class="VideoStudio.Controls.AddStepButton"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="Transparent">
+
+    <StackPanel HorizontalAlignment="Center" Spacing="0">
+        <!-- Top connector -->
+        <Border Width="1" Height="12" HorizontalAlignment="Center"
+                Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+
+        <!-- Small + button -->
+        <Button x:Name="AddButton"
+                Width="28" Height="28"
+                Padding="0"
+                CornerRadius="14"
+                Background="Transparent"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                HorizontalAlignment="Center"
+                ToolTipService.ToolTip="Add Step">
+            <FontIcon Glyph="&#xE710;" FontSize="10"
+                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <Button.Flyout>
+                <MenuFlyout x:Name="EffectsFlyout"/>
+            </Button.Flyout>
+        </Button>
+
+        <!-- Bottom connector -->
+        <Border Width="1" Height="12" HorizontalAlignment="Center"
+                Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+    </StackPanel>
+</UserControl>

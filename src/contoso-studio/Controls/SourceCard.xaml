@@ -1,0 +1,132 @@
+<UserControl
+    x:Class="VideoStudio.Controls.SourceCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    AllowDrop="True"
+    DragOver="OnDragOver"
+    Drop="OnDrop">
+
+    <Border Padding="16"
+            CornerRadius="8"
+            BorderThickness="1"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+
+        <Grid>
+            <!-- Empty state -->
+            <StackPanel x:Name="EmptyState"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="8"
+                        Padding="24">
+                <FontIcon Glyph="&#xE8B2;"
+                          FontSize="36"
+                          Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                          HorizontalAlignment="Center"/>
+                <TextBlock Text="Drop a video here or click Import"
+                           Style="{ThemeResource BodyTextBlockStyle}"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Content state -->
+            <Grid x:Name="ContentPanel" ColumnDefinitions="Auto,*">
+
+                <!-- Left: Clickable thumbnail (opens playback flyout) -->
+                <Button x:Name="ThumbnailButton"
+                        Grid.Column="0"
+                        Padding="0"
+                        CornerRadius="6"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        Click="OnThumbnailClick"
+                        ToolTipService.ToolTip="Click to preview video">
+                    <Grid Width="180" Height="101" CornerRadius="6">
+                        <Border Background="{ThemeResource PanelBackgroundBrush}" CornerRadius="6"/>
+                        <Image x:Name="ThumbnailImage"
+                               Stretch="UniformToFill"
+                               VerticalAlignment="Center"/>
+                        <!-- Play overlay -->
+                        <Border Background="#60000000" CornerRadius="6"/>
+                        <FontIcon Glyph="&#xE768;" FontSize="28"
+                                  Foreground="White"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center"
+                                  Opacity="0.9"/>
+                    </Grid>
+                    <Button.Flyout>
+                        <Flyout x:Name="PlaybackFlyout"
+                                Placement="Bottom">
+                            <StackPanel Width="480" Spacing="8">
+                                <MediaPlayerElement x:Name="PlayerElement"
+                                                    AreTransportControlsEnabled="True"
+                                                    AutoPlay="True"
+                                                    Height="270"
+                                                    Stretch="Uniform"/>
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <!-- Right: Video metadata -->
+                <StackPanel Grid.Column="1" Spacing="6" Margin="16,0,0,0"
+                            VerticalAlignment="Top">
+
+                    <!-- Header row: title + change button -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE8B2;" FontSize="14"
+                                      Foreground="{StaticResource AccentTealBrush}"
+                                      VerticalAlignment="Center"/>
+                            <TextBlock Text="Source Video"
+                                       Style="{ThemeResource BodyStrongTextBlockStyle}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Change" Padding="8,4"
+                                FontSize="12" Click="OnChangeClicked"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- File name -->
+                    <TextBlock x:Name="FileNameText"
+                               FontSize="13"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+
+                    <!-- Metadata grid -->
+                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                          ColumnSpacing="12" RowSpacing="3">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Resolution" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="ResolutionText" FontSize="11"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Duration" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="DurationText" FontSize="11"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Size" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="FileSizeText" FontSize="11"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Type" FontSize="11"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="FileTypeText" FontSize="11"/>
+                    </Grid>
+
+                    <!-- Thumbnail strip -->
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  HorizontalScrollMode="Auto"
+                                  VerticalScrollMode="Disabled"
+                                  Margin="0,4,0,0">
+                        <StackPanel x:Name="ThumbnailStrip"
+                                    Orientation="Horizontal" Spacing="3"/>
+                    </ScrollViewer>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>

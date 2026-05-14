@@ -1,0 +1,13 @@
+bin/
+obj/
+.vs/
+*.user
+screenshot.png
+TestData/
+Assets/Models/*.onnx
+
+# ffmpeg static build downloaded by setup
+tools/ffmpeg.exe
+.copilot-tmp
+screenshots
+_qnn.log

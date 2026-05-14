@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "name": "Podcast Episode",
+  "description": "Drop in a recording → transcript, chapter markers, show notes, top highlights, and ready-to-share short clips with burned-in captions.",
+  "steps": [
+    {
+      "id": "transcribe",
+      "options": {
+        "WhisperModel": "Tiny",
+        "TranscribeLanguage": "en",
+        "TranscribeTranslate": false,
+        "HardwarePreference": "Auto"
+      }
+    },
+    {
+      "id": "chapter-markers",
+      "options": { "ChapterTargetCount": 6 }
+    },
+    {
+      "id": "show-notes",
+      "options": {}
+    },
+    {
+      "id": "highlight-picker",
+      "options": { "HighlightTargetCount": 3, "HighlightClipSeconds": 30 }
+    },
+    {
+      "id": "caption-burn",
+      "options": {}
+    },
+    {
+      "id": "export-clips",
+      "options": {}
+    }
+  ]
+}
