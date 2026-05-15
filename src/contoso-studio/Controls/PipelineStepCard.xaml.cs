@@ -473,9 +473,11 @@ public sealed partial class PipelineStepCard : UserControl
         bool isSmartCut = string.Equals(step.Id, "smart-cut", StringComparison.OrdinalIgnoreCase);
         bool isChapters = string.Equals(step.Id, "chapter-markers", StringComparison.OrdinalIgnoreCase);
         bool isHighlights = string.Equals(step.Id, "highlight-picker", StringComparison.OrdinalIgnoreCase);
+        bool isShowNotes = string.Equals(step.Id, "show-notes", StringComparison.OrdinalIgnoreCase);
         bool isWinML = step.Engine == EngineType.WindowsML;
+        bool usesLm = isChapters || isHighlights || isShowNotes;
 
-        OptionsButton.Visibility = (isDetect || isTranscribe || isSilence || isSmartCut || isChapters || isHighlights || isWinML) ? Visibility.Visible : Visibility.Collapsed;
+        OptionsButton.Visibility = (isDetect || isTranscribe || isSilence || isSmartCut || isChapters || isHighlights || isShowNotes || isWinML) ? Visibility.Visible : Visibility.Collapsed;
         OptionsConfidencePanel.Visibility = isDetect ? Visibility.Visible : Visibility.Collapsed;
         OptionsFramesPanel.Visibility = isDetect ? Visibility.Visible : Visibility.Collapsed;
         OptionsWhisperPanel.Visibility = isTranscribe ? Visibility.Visible : Visibility.Collapsed;
@@ -483,6 +485,7 @@ public sealed partial class PipelineStepCard : UserControl
         OptionsSmartCutPanel.Visibility = isSmartCut ? Visibility.Visible : Visibility.Collapsed;
         OptionsChaptersPanel.Visibility = isChapters ? Visibility.Visible : Visibility.Collapsed;
         OptionsHighlightsPanel.Visibility = isHighlights ? Visibility.Visible : Visibility.Collapsed;
+        OptionsLanguageModelPanel.Visibility = usesLm ? Visibility.Visible : Visibility.Collapsed;
         // Hardware combo only makes sense for steps that actually pick an EP. DSP/ffmpeg/Phi-Silica steps don't.
         OptionsHardwarePanel.Visibility = (isWinML && !isSilence && !isSmartCut) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -541,7 +544,30 @@ public sealed partial class PipelineStepCard : UserControl
         {
             OptionsHardwareCombo.SelectedIndex = (int)step.HardwarePreference;
         }
+        if (usesLm)
+        {
+            if (OptionsLanguageModelCombo.ItemsSource == null)
+                OptionsLanguageModelCombo.ItemsSource = Services.LanguageModelRegistry.Catalog;
+            var id = step.LanguageModelBackendId ?? Services.PhiSilicaLanguageModel.BackendId;
+            int sel = -1;
+            for (int i = 0; i < Services.LanguageModelRegistry.Catalog.Count; i++)
+            {
+                if (string.Equals(Services.LanguageModelRegistry.Catalog[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                { sel = i; break; }
+            }
+            OptionsLanguageModelCombo.SelectedIndex = sel >= 0 ? sel : 0;
+            var entry = OptionsLanguageModelCombo.SelectedItem as Services.LanguageModelRegistry.Entry;
+            OptionsLanguageModelTagline.Text = entry?.Tagline ?? string.Empty;
+        }
         _suppressOptionsHandlers = false;
+    }
+
+    private void OnOptionsLanguageModelChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressOptionsHandlers || Step is not { } step) return;
+        if (OptionsLanguageModelCombo.SelectedItem is not Services.LanguageModelRegistry.Entry entry) return;
+        step.LanguageModelBackendId = entry.Id;
+        OptionsLanguageModelTagline.Text = entry.Tagline ?? string.Empty;
     }
 
     private bool _languageItemsInitialized;

@@ -61,6 +61,9 @@ public partial class PipelineStep : ObservableObject
     [ObservableProperty] public partial int HighlightTargetCount { get; set; } = 3;
     [ObservableProperty] public partial int HighlightClipSeconds { get; set; } = 30;
 
+    // Phase 9 — pluggable LLM backend for Chapter Markers / Show Notes / Highlights.
+    [ObservableProperty] public partial string LanguageModelBackendId { get; set; } = Services.PhiSilicaLanguageModel.BackendId;
+
     /// <summary>Human-readable label of the device the step actually used (e.g. "NPU (QNN)" or "CPU"). Empty when never run.</summary>
     [ObservableProperty] public partial string DeviceUsedLabel { get; set; } = string.Empty;
 

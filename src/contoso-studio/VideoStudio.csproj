@@ -47,12 +47,20 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="1.1.0" />
+    <!-- Foundry transitively pulls these cross-platform ORT packages. We only ship Windows,
+         so suppress them — they cause MSBuild copy failures on win-arm64 (missing .dll
+         in the package payload). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="*" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="*" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Foundry" Version="*" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.3.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="OpenAI" Version="2.10.0" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1721" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
@@ -74,5 +82,16 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
-  </PropertyGroup>
+  </PropertyGroup>  <!-- Foundry Local ships its own onnxruntime.dll which collides with WindowsML's.
+       Foundry runs its inference engine out-of-process via the bundled service binary,
+       so its in-package native ORT is not actually needed for our usage (we talk to it
+       over HTTP). Strip the duplicate from the MSIX payload. -->
+  <Target Name="DedupeFoundryOnnxRuntime" AfterTargets="ResolveAssemblyReferences" BeforeTargets="_GenerateAppxPackage;GenerateAppxPackage;_CopyFilesMarkedCopyLocal">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(FileName)%(Extension)' == 'onnxruntime.dll' and $([System.String]::Copy('%(FullPath)').Contains('microsoft.ml.onnxruntime.foundry'))" />
+      <None Remove="@(None)" Condition="'%(FileName)%(Extension)' == 'onnxruntime.dll' and $([System.String]::Copy('%(FullPath)').Contains('microsoft.ml.onnxruntime.foundry'))" />
+      <Content Remove="@(Content)" Condition="'%(FileName)%(Extension)' == 'onnxruntime.dll' and $([System.String]::Copy('%(FullPath)').Contains('microsoft.ml.onnxruntime.foundry'))" />
+    </ItemGroup>
+  </Target>
+
 </Project>

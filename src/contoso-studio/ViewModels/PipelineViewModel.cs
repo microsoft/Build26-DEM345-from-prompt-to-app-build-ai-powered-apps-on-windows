@@ -24,10 +24,9 @@ public sealed partial class PipelineViewModel : ObservableObject
     private readonly DepthEstimationRunner _depthRunner = new();
     private readonly SceneTagger _sceneTagger = new();
     private readonly WhisperRunner _whisperRunner = new();
-    private readonly PhiSilicaRunner _phiRunner = new();
-    private readonly ChapterGenerator _chapterGenerator;
-    private readonly ShowNotesGenerator _showNotesGenerator;
-    private readonly HighlightPicker _highlightPicker;
+    private readonly ChapterGenerator _chapterGenerator = new();
+    private readonly ShowNotesGenerator _showNotesGenerator = new();
+    private readonly HighlightPicker _highlightPicker = new();
     private readonly SuperResolutionRunner _srRunner = new();
     private HardwareMonitor? _hardwareMonitor;
     private bool _modelLoaded;
@@ -78,9 +77,6 @@ public sealed partial class PipelineViewModel : ObservableObject
     {
         StatusMessage = string.Empty;
         InfoBarSeverity = InfoBarSeverity.Informational;
-        _chapterGenerator = new ChapterGenerator(_phiRunner);
-        _showNotesGenerator = new ShowNotesGenerator(_phiRunner);
-        _highlightPicker = new HighlightPicker(_phiRunner);
 
         var containerEffects = new List<Effect>
         {
@@ -100,9 +96,9 @@ public sealed partial class PipelineViewModel : ObservableObject
             },
             new("detect-silence", "Detect Silence", "Find silent regions in audio (CPU DSP)", EngineType.WindowsML, "\uE74F"),
             new("smart-cut", "Smart Cut", "Trim silent regions out of media (uses Detect Silence)", EngineType.WindowsML, "\uE8C6") { Dependencies = ["detect-silence"] },
-            new("chapter-markers", "Chapter Markers", "Generate chapter timestamps from a transcript via Phi Silica (Windows AI)", EngineType.WindowsAI, "\uE8FD") { Dependencies = ["transcribe"] },
-            new("show-notes", "Show Notes", "Write episode summary, key takeaways and topic tags from a transcript via Phi Silica (Windows AI)", EngineType.WindowsAI, "\uE7C3") { Dependencies = ["transcribe"] },
-            new("highlight-picker", "Highlight Picker", "Pick the top 3 share-worthy clips from a transcript via Phi Silica (Windows AI)", EngineType.WindowsAI, "\uE734") { Dependencies = ["transcribe"] },
+            new("chapter-markers", "Chapter Markers", "Generate chapter timestamps from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE8FD") { Dependencies = ["transcribe"], UsesLanguageModel = true },
+            new("show-notes", "Show Notes", "Write episode summary, key takeaways and topic tags from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE7C3") { Dependencies = ["transcribe"], UsesLanguageModel = true },
+            new("highlight-picker", "Highlight Picker", "Pick the top 3 share-worthy clips from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE734") { Dependencies = ["transcribe"], UsesLanguageModel = true },
             new("caption-burn", "Burn Captions", "Burn caption text from an upstream transcript onto the video using ffmpeg + libass", EngineType.WindowsML, "\uE890")
             {
                 Dependencies = ["transcribe"],
@@ -930,7 +926,9 @@ public sealed partial class PipelineViewModel : ObservableObject
         step.DeviceUsedLabel = "NPU (Phi Silica)";
         step.AppendLog($"Target chapters: {step.ChapterTargetCount}");
 
+        var lm = LanguageModelRegistry.Resolve(step.LanguageModelBackendId);
         var result = await _chapterGenerator.GenerateAsync(
+            lm,
             transcript,
             targetCount: step.ChapterTargetCount,
             onStatus: msg =>
@@ -1025,7 +1023,9 @@ public sealed partial class PipelineViewModel : ObservableObject
         step.Progress = 10;
         step.DeviceUsedLabel = "NPU (Phi Silica)";
 
+        var lm = LanguageModelRegistry.Resolve(step.LanguageModelBackendId);
         var result = await _showNotesGenerator.GenerateAsync(
+            lm,
             transcript,
             chapters,
             onStatus: msg =>
@@ -1093,7 +1093,9 @@ public sealed partial class PipelineViewModel : ObservableObject
         step.DeviceUsedLabel = "NPU (Phi Silica)";
         step.AppendLog($"Target highlights: {step.HighlightTargetCount} • clip length: {step.HighlightClipSeconds}s");
 
+        var lm = LanguageModelRegistry.Resolve(step.LanguageModelBackendId);
         var result = await _highlightPicker.PickAsync(
+            lm,
             transcript,
             targetCount: step.HighlightTargetCount,
             targetClipSeconds: step.HighlightClipSeconds,

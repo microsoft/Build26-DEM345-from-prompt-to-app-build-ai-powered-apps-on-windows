@@ -18,14 +18,10 @@ namespace VideoStudio.Services;
 /// </summary>
 public sealed class HighlightPicker
 {
-    private readonly PhiSilicaRunner _phi;
-
-    public HighlightPicker(PhiSilicaRunner phi)
-    {
-        _phi = phi;
-    }
+    public HighlightPicker() { }
 
     public async Task<HighlightResult> PickAsync(
+        ILanguageModel lm,
         TranscriptResult transcript,
         int targetCount = 3,
         double targetClipSeconds = 30,
@@ -40,9 +36,9 @@ public sealed class HighlightPicker
 
         try
         {
-            await _phi.EnsureReadyAsync(onStatus, ct);
-            onStatus?.Invoke($"Asking Phi Silica for {targetCount} highlights...");
-            string raw = await CallPhiAsync(transcript, targetCount, targetClipSeconds, onStatus, ct);
+            await lm.EnsureReadyAsync(onStatus, ct);
+            onStatus?.Invoke($"Asking {lm.DisplayName} for {targetCount} highlights...");
+            string raw = await CallLmAsync(lm, transcript, targetCount, targetClipSeconds, onStatus, ct);
             var highlights = ParseHighlights(raw, transcript, targetClipSeconds);
             if (highlights.Count > 0)
             {
@@ -50,7 +46,7 @@ public sealed class HighlightPicker
                 return new HighlightResult
                 {
                     Highlights = highlights,
-                    DeviceUsed = _phi.ActiveBackend,
+                    DeviceUsed = lm.ActiveBackend,
                     ElapsedMs = sw.ElapsedMilliseconds,
                     RawResponse = raw,
                 };
@@ -73,7 +69,7 @@ public sealed class HighlightPicker
         };
     }
 
-    private async Task<string> CallPhiAsync(TranscriptResult transcript, int targetCount, double clipLen, Action<string>? onStatus, CancellationToken ct)
+    private async Task<string> CallLmAsync(ILanguageModel lm, TranscriptResult transcript, int targetCount, double clipLen, Action<string>? onStatus, CancellationToken ct)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Transcript (timestamped):");
@@ -95,7 +91,7 @@ public sealed class HighlightPicker
             "{\"highlights\":[{\"start\":\"mm:ss\",\"end\":\"mm:ss\",\"title\":\"<5-7 word teaser>\",\"reason\":\"<one short sentence>\"}]}\n\n" +
             "Source:\n" + body;
 
-        return await _phi.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
+        return await lm.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
     }
 
     private static IReadOnlyList<Highlight> ParseHighlights(string raw, TranscriptResult transcript, double clipLen)

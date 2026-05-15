@@ -28,6 +28,13 @@ public partial class Effect : ObservableObject
     public EffectPin[] OutputPins { get; set; } = [];
 
     /// <summary>
+    /// Phase 9: when true, this effect uses an <see cref="VideoStudio.Services.ILanguageModel"/>
+    /// backend (Chapter Markers, Show Notes, Highlights). The step card surfaces a backend
+    /// dropdown bound to <see cref="PipelineStep.LanguageModelBackendId"/>.
+    /// </summary>
+    public bool UsesLanguageModel { get; set; }
+
+    /// <summary>
     /// Phase 8.8.1: pins to use for layout/wiring/backfill. Returns the explicitly declared
     /// <see cref="InputPins"/> when present; otherwise returns a single default <c>video</c>
     /// pin so legacy effects still participate in the graph as a single-input chain.

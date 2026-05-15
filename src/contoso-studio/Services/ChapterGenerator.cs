@@ -18,14 +18,10 @@ namespace VideoStudio.Services;
 /// </summary>
 public sealed class ChapterGenerator
 {
-    private readonly PhiSilicaRunner _phi;
-
-    public ChapterGenerator(PhiSilicaRunner phi)
-    {
-        _phi = phi;
-    }
+    public ChapterGenerator() { }
 
     public async Task<ChapterResult> GenerateAsync(
+        ILanguageModel lm,
         TranscriptResult transcript,
         int targetCount = 6,
         Action<string>? onStatus = null,
@@ -42,9 +38,9 @@ public sealed class ChapterGenerator
         // Try Phi Silica first.
         try
         {
-            await _phi.EnsureReadyAsync(onStatus, ct);
-            onStatus?.Invoke("Generating chapters with Phi Silica...");
-            var raw = await CallPhiAsync(transcript, targetCount, onStatus, ct);
+            await lm.EnsureReadyAsync(onStatus, ct);
+            onStatus?.Invoke($"Generating chapters with {lm.DisplayName}...");
+            var raw = await CallLmAsync(lm, transcript, targetCount, onStatus, ct);
             onStatus?.Invoke("Parsing chapter response...");
             var parsed = ParseChapters(raw, transcript.AudioDurationSeconds);
             if (parsed.Count > 0)
@@ -53,7 +49,7 @@ public sealed class ChapterGenerator
                 return new ChapterResult
                 {
                     Chapters = parsed,
-                    DeviceUsed = _phi.ActiveBackend,
+                    DeviceUsed = lm.ActiveBackend,
                     ElapsedMs = sw.ElapsedMilliseconds,
                     RawResponse = raw,
                 };
@@ -76,7 +72,7 @@ public sealed class ChapterGenerator
         };
     }
 
-    private async Task<string> CallPhiAsync(TranscriptResult transcript, int targetCount, Action<string>? onStatus, CancellationToken ct)
+    private async Task<string> CallLmAsync(ILanguageModel lm, TranscriptResult transcript, int targetCount, Action<string>? onStatus, CancellationToken ct)
     {
         // Build a compact transcript view: "[mm:ss] text" lines
         var sb = new StringBuilder();
@@ -100,7 +96,7 @@ public sealed class ChapterGenerator
             "Return JSON in this exact shape: {\"chapters\":[{\"time\":\"00:00\",\"title\":\"...\",\"summary\":\"...\"}]}.\n\n" +
             "Transcript:\n" + transcriptText;
 
-        return await _phi.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
+        return await lm.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
     }
 
     private static List<Chapter> ParseChapters(string raw, double audioDuration)

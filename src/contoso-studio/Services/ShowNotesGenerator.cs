@@ -19,14 +19,10 @@ namespace VideoStudio.Services;
 /// </summary>
 public sealed class ShowNotesGenerator
 {
-    private readonly PhiSilicaRunner _phi;
-
-    public ShowNotesGenerator(PhiSilicaRunner phi)
-    {
-        _phi = phi;
-    }
+    public ShowNotesGenerator() { }
 
     public async Task<ShowNotesResult> GenerateAsync(
+        ILanguageModel lm,
         TranscriptResult transcript,
         ChapterResult? chapters = null,
         Action<string>? onStatus = null,
@@ -39,9 +35,9 @@ public sealed class ShowNotesGenerator
         // Try Phi Silica first.
         try
         {
-            await _phi.EnsureReadyAsync(onStatus, ct);
-            onStatus?.Invoke("Generating show notes with Phi Silica...");
-            string raw = await CallPhiAsync(transcript, chapters, onStatus, ct);
+            await lm.EnsureReadyAsync(onStatus, ct);
+            onStatus?.Invoke($"Generating show notes with {lm.DisplayName}...");
+            string raw = await CallLmAsync(lm, transcript, chapters, onStatus, ct);
             string md = CleanMarkdown(raw);
             var blocks = ParseMarkdown(md);
             if (blocks.Count > 0)
@@ -51,7 +47,7 @@ public sealed class ShowNotesGenerator
                 {
                     Markdown = md,
                     Blocks = blocks,
-                    DeviceUsed = _phi.ActiveBackend,
+                    DeviceUsed = lm.ActiveBackend,
                     ElapsedMs = sw.ElapsedMilliseconds,
                     RawResponse = raw,
                 };
@@ -77,7 +73,7 @@ public sealed class ShowNotesGenerator
         };
     }
 
-    private async Task<string> CallPhiAsync(TranscriptResult transcript, ChapterResult? chapters, Action<string>? onStatus, CancellationToken ct)
+    private async Task<string> CallLmAsync(ILanguageModel lm, TranscriptResult transcript, ChapterResult? chapters, Action<string>? onStatus, CancellationToken ct)
     {
         var sb = new StringBuilder();
 
@@ -111,7 +107,7 @@ public sealed class ShowNotesGenerator
             "<comma-separated list of 4-7 short topic tags>\n\n" +
             "Source material:\n" + body;
 
-        return await _phi.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
+        return await lm.GenerateAsync(system, user, partial => onStatus?.Invoke($"...{partial.Length} chars"), ct);
     }
 
     private static string CleanMarkdown(string raw)

@@ -280,6 +280,17 @@
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
                                     </StackPanel>
+                                    <!-- Language model backend (Chapter Markers / Show Notes / Highlights) -->
+                                    <StackPanel x:Name="OptionsLanguageModelPanel" Spacing="4" Visibility="Collapsed">
+                                        <TextBlock Text="Language model" FontSize="12"/>
+                                        <ComboBox x:Name="OptionsLanguageModelCombo"
+                                                  Width="240"
+                                                  DisplayMemberPath="DisplayName"
+                                                  SelectionChanged="OnOptionsLanguageModelChanged"/>
+                                        <TextBlock x:Name="OptionsLanguageModelTagline"
+                                                   FontSize="11" TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                    </StackPanel>
                                     <!-- Chapter Markers options -->
                                     <StackPanel x:Name="OptionsChaptersPanel" Spacing="10" Visibility="Collapsed">
                                         <StackPanel Spacing="4">
