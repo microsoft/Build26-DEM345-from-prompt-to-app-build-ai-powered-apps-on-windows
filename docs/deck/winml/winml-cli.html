@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Windows ML CLI (Preview)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0b0d12;
+    --bg-2: #11141b;
+    --panel: #1a1f2b;
+    --panel-2: #222838;
+    --border: #2a3142;
+    --text: #f4f6fb;
+    --muted: #aab2c5;
+    --accent: #8b5cf6;
+    --accent-2: #00d4ff;
+    --green: #22c55e;
+    --orange: #f59e0b;
+    --pill: #2b3346;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: radial-gradient(ellipse at top left, #1a1230 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  .deck {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 28px 56px 32px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 6px;
+  }
+  .icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6d28d9, #00b4d8);
+    display: grid; place-items: center;
+    font-size: 22px;
+    box-shadow: 0 6px 24px rgba(139,92,246,.35);
+  }
+  h1 {
+    font-size: 34px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.5px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 15px;
+    margin: 8px 0 18px;
+  }
+
+  /* ── Sources row (top three boxes) ────────── */
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 6px;
+  }
+  .source {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 16px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .arrows {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin: 2px 0;
+  }
+  .arrows span {
+    text-align: center;
+    color: var(--muted);
+    font-size: 18px;
+  }
+
+  /* ── Tooling row ──────────────────────────── */
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 10px;
+  }
+  .tool {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .tool .glyph {
+    width: 28px; height: 28px;
+    border-radius: 7px;
+    display: grid; place-items: center;
+    font-size: 15px;
+  }
+  .glyph.cli   { background: linear-gradient(135deg,#7c3aed,#06b6d4); }
+  .glyph.copilot { background: #1f2937; border:1px solid #374151; }
+  .glyph.foundry { background: linear-gradient(135deg,#0ea5e9,#22d3ee); }
+
+  /* ── Pipeline pill row ───────────────────── */
+  .pipeline {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .step {
+    flex: 1;
+    text-align: center;
+    position: relative;
+  }
+  .step .pill {
+    display: inline-block;
+    padding: 7px 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-2);
+  }
+  .step .opt {
+    display: block;
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    font-style: italic;
+  }
+  .step.arrow {
+    flex: 0 0 20px;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .down-arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 18px;
+    margin: 6px 0;
+  }
+
+  .optimized {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    width: max-content;
+    margin: 0 auto;
+  }
+  .optimized .bolt {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(245,158,11,.15);
+    border: 2px solid var(--orange);
+    color: var(--orange);
+    display: grid; place-items: center;
+    font-size: 18px;
+  }
+  .optimized .label {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  /* ── Bottom checklist + footer ────────────── */
+  .bottom {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: 18px;
+    gap: 24px;
+  }
+  .checks { display: flex; flex-direction: column; gap: 8px; }
+  .check {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 16px; font-weight: 600;
+  }
+  .check .box {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    background: rgba(34,197,94,.15);
+    border: 1.5px solid var(--green);
+    color: var(--green);
+    display: grid; place-items: center;
+    font-size: 14px;
+  }
+  .check .play {
+    color: var(--accent-2);
+    font-size: 12px;
+  }
+  .footer-note {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 13px;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+  <div class="deck">
+    <header>
+      <div class="icon">⌨️</div>
+      <h1>Windows ML CLI <span style="color:var(--muted);font-weight:500;">(Preview)</span></h1>
+    </header>
+    <div class="sub">Unified, flexible and agent-ready model optimization pipeline for Windows ML</div>
+
+    <div class="sources">
+      <div class="source">40K+ HuggingFace<br/>ONNX Models</div>
+      <div class="source">230K+ HuggingFace<br/>PyTorch Models</div>
+      <div class="source">Train your own<br/>custom model</div>
+    </div>
+
+    <div class="arrows"><span>↓</span><span>↓</span><span>↓</span></div>
+
+    <div class="tools">
+      <div class="tool"><span class="glyph cli">⌨</span> Windows ML CLI</div>
+      <div class="tool"><span class="glyph copilot">🤖</span> GitHub Copilot</div>
+      <div class="tool"><span class="glyph foundry">🧰</span> Foundry Toolkit</div>
+    </div>
+
+    <div class="pipeline">
+      <div class="step"><span class="pill">Convert</span><span class="opt">Optional</span></div>
+      <div class="step arrow">→</div>
+      <div class="step"><span class="pill">Analyze</span></div>
+      <div class="step arrow">→</div>
+      <div class="step"><span class="pill">Optimize</span></div>
+      <div class="step arrow">→</div>
+      <div class="step"><span class="pill">Quantize</span><span class="opt">Optional</span></div>
+      <div class="step arrow">→</div>
+      <div class="step"><span class="pill">Benchmark</span></div>
+    </div>
+
+    <div class="down-arrow">↓</div>
+
+    <div class="optimized">
+      <div class="bolt">⚡</div>
+      <div class="label">Optimized Model</div>
+    </div>
+
+    <div class="bottom">
+      <div class="checks">
+        <div class="check"><span class="box">✓</span> One-stop toolchain <span class="play">▶</span></div>
+        <div class="check"><span class="box">✓</span> Flexible pipeline <span class="play">▶</span></div>
+        <div class="check"><span class="box">✓</span> Agent and AI ready <span class="play">▶</span></div>
+      </div>
+      <div class="footer-note">Available today for select model architectures – more coming soon!</div>
+    </div>
+  </div>
+</body>
+</html>
