@@ -51,7 +51,6 @@
     <!-- Foundry transitively pulls these cross-platform ORT packages. We only ship Windows,
          so suppress them — they cause MSBuild copy failures on win-arm64 (missing .dll
          in the package payload). -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="*" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="*" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Foundry" Version="*" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
@@ -64,7 +63,6 @@
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.*" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1721" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
-    <PackageReference Include="Microsoft.WSL.Containers" Version="2.8.1" />
   </ItemGroup>
 
   <!--
@@ -82,7 +80,8 @@
     <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
     <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
-  </PropertyGroup>  <!-- Foundry Local ships its own onnxruntime.dll which collides with WindowsML's.
+  </PropertyGroup>
+  <!-- Foundry Local ships its own onnxruntime.dll which collides with WindowsML's.
        Foundry runs its inference engine out-of-process via the bundled service binary,
        so its in-package native ORT is not actually needed for our usage (we talk to it
        over HTTP). Strip the duplicate from the MSIX payload. -->
