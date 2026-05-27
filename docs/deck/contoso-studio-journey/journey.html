@@ -77,15 +77,12 @@
     border: 1px solid var(--bubble-edge);
     border-radius: 999px;
   }
-  .takeaway {
+  .caption {
     margin-top: auto;
-    color: var(--ink);
-    font-size: 1.85vh;
-    line-height: 1.4;
-    border-left: 3px solid var(--teal-bright);
-    padding-left: 1vw;
+    color: var(--dim);
+    font-size: 1.7vh;
+    line-height: 1.45;
   }
-  .takeaway b { color: var(--teal-bright); font-weight: 600; }
 
   .shot {
     max-width: 100%;
@@ -101,14 +98,6 @@
   .title-slide { justify-content: center; align-items: center; text-align: center; }
   .title-slide h1 { font-size: 9.5vh; max-width: 16ch; }
   .title-slide .sub { color: var(--dim); font-size: 2.6vh; max-width: 60ch; line-height: 1.5; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(43,212,192,.1); border: 1px solid var(--bubble-edge);
-    color: var(--teal-bright); font-size: 1.5vh; letter-spacing: .2em;
-    text-transform: uppercase; padding: 0.7vh 1.4vw; border-radius: 999px;
-    margin-bottom: 2.4vh;
-  }
-  .dot { width: 6px; height: 6px; background: var(--teal-bright); border-radius: 50%; box-shadow: 0 0 8px var(--teal-bright); }
 
   /* Two-up image grid */
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6vh; width: 100%; height: 100%; }
@@ -117,9 +106,8 @@
   .grid2 figcaption { color: var(--dim); font-size: 1.3vh; letter-spacing: .14em; text-transform: uppercase; }
 
   /* Closing list */
-  .lessons { font-size: 2.3vh; line-height: 1.55; max-width: 60ch; }
+  .lessons { font-size: 2.1vh; line-height: 1.55; max-width: 60ch; color: var(--ink); }
   .lessons li { margin-bottom: 1vh; }
-  .lessons li b { color: var(--teal-bright); }
 
   /* Chrome */
   .chrome {
@@ -139,19 +127,17 @@
 
   <!-- 1. TITLE -->
   <section class="slide active title-slide">
-    <span class="pill"><span class="dot"></span>one developer · one Copilot CLI · one repo</span>
     <h1>Contoso Studio</h1>
-    <p class="sub">Built with prompts. Re-architected more than once. Still iterating.</p>
+    <p class="sub">How the app was built.</p>
   </section>
 
   <!-- 2. THE IDEA -->
   <section class="slide">
-    <div class="chapter">The idea</div>
-    <div class="kicker">No design. No mockup. Just a direction.</div>
+    <div class="chapter">The first prompt</div>
     <div class="body">
       <div class="left">
         <div class="prompt">i was thinking of building a media application that uses a combination of ml models and media processing in containers… could I ask you to think about some realistic things we could do for the container side?</div>
-        <div class="takeaway"><b>I described a vibe.</b> Copilot proposed the scenario, picked the libraries, scaffolded the app.</div>
+        <div class="caption">The starting point: a generic video studio sample-app shell.</div>
       </div>
       <div class="right"><img class="shot" src="img/era-prebrand-loaded.png" alt="Generic Video Studio sample-app look"></div>
     </div>
@@ -159,12 +145,11 @@
 
   <!-- 3. MAKE IT A BRAND -->
   <section class="slide">
-    <div class="chapter">Make it a real brand</div>
-    <div class="kicker">One prompt. A whole identity.</div>
+    <div class="chapter">Brand and layout</div>
     <div class="body">
       <div class="left">
         <div class="prompt">right now it looks like a sample app — can we make it look like a real brand, can we design some ideas?</div>
-        <div class="takeaway">A name (<b>Contoso Studio</b>), a teal palette, an icon, a four-panel layout — all proposed in a single design pass.</div>
+        <div class="caption">Result: the name Contoso Studio, a teal palette, an icon, and a four-panel layout.</div>
       </div>
       <div class="right"><img class="shot" src="img/era-postbrand-loaded.png" alt="Contoso Studio rebranded - 3 panel"></div>
     </div>
@@ -172,13 +157,11 @@
 
   <!-- 4. THE MESSY MIDDLE -->
   <section class="slide">
-    <div class="chapter">The messy middle</div>
-    <div class="kicker">A handful of prompts. Each one moved the app closer to "real."</div>
+    <div class="chapter">Iterating on layout</div>
     <div class="body">
       <div class="left">
         <div class="prompt">can we have a nice preview/live playback… the titlebar is broken… nice drag and drop of effects… the panes need more separation</div>
         <div class="prompt">can we move things around — sources top, effects bottom, full progress on the right…</div>
-        <div class="takeaway"><b>Iterating in plain English.</b> Layout, polish, broken behavior, then a re-layout — all conversational, no rewrites needed.</div>
       </div>
       <div class="right"><img class="shot" src="img/era-firstcommit-loaded.png" alt="The first-commit layout"></div>
     </div>
@@ -186,18 +169,16 @@
 
   <!-- 5. THROW OUT THE UI - notebook + winui-ey -->
   <section class="slide">
-    <div class="chapter">Throw out the UI</div>
-    <div class="kicker">A whole new metaphor — proposed in two prompts.</div>
+    <div class="chapter">New UI: notebook</div>
     <div class="body">
       <div class="left">
         <div class="prompt">could we do a thing like a Jupyter notebook almost, but for video processing? Build your own pipeline with steps you can add, remove, move around, and see input/output directly inline.</div>
         <div class="prompt">big part of the goal is to demonstrate native winui — make it as pretty and winui-ey as possible, like a real production app for power users on a desktop.</div>
-        <div class="takeaway"><b>Rewriting the UI was cheap.</b> The metaphor changed in one conversation; the WinUI polish came in the next.</div>
       </div>
       <div class="right">
         <div class="grid2">
           <figure><img src="img/era-02-3col-navigationview.png" alt=""><figcaption>Notebook layout</figcaption></figure>
-          <figure><img src="img/era-05-titlebar-actions.png" alt=""><figcaption>WinUI-ey polish</figcaption></figure>
+          <figure><img src="img/era-05-titlebar-actions.png" alt=""><figcaption>WinUI polish</figcaption></figure>
         </div>
       </div>
     </div>
@@ -205,74 +186,67 @@
 
   <!-- 6. MAKE THE EFFECTS REAL — NPU -->
   <section class="slide">
-    <div class="chapter">Make it real, for real</div>
-    <div class="kicker">The POC works and looks good. Now wire in actual hardware.</div>
+    <div class="chapter">Running on the NPU</div>
     <div class="body">
       <div class="left">
         <div class="prompt">i need to make this as real as possible right now. let's try to get the yolo effect working — right now it falls back to demo and doesn't run on the npu.</div>
-        <div class="takeaway"><b>From "demo mode" to real ONNX inference</b> on the NPU via Windows ML + QNN. Hundreds of detections at 97% confidence, on the actual neural processor.</div>
+        <div class="caption">YOLO ONNX inference on the NPU via Windows ML + QNN.</div>
       </div>
-      <div class="right"><img class="shot" src="img/era-06-always-expanded-cards.png" alt="WinUI-ey app with Detect Objects effect and NPU usage bar"></div>
+      <div class="right"><img class="shot" src="img/era-06-always-expanded-cards.png" alt="WinUI app with Detect Objects effect and NPU usage bar"></div>
     </div>
   </section>
 
   <!-- 7. SKILLS DO THE HEAVY LIFTING -->
   <section class="slide">
-    <div class="chapter">Skills do the heavy lifting</div>
-    <div class="kicker">Asking the agent to use the right tool for the job.</div>
+    <div class="chapter">UI testing skill</div>
     <div class="body">
       <div class="left">
         <div class="prompt">seeing this — take a look and please use the ui-testing skill to get screenshots and inspect elements to debug until it works.</div>
-        <div class="takeaway"><b>The agent can drive the app it just built.</b> Inspect the visual tree, click buttons, grab screenshots, fix the bug — all in the same conversation.</div>
+        <div class="caption">The agent drives the app: inspects the visual tree, clicks, screenshots, fixes.</div>
       </div>
-      <div class="right"><img class="shot" src="img/era-04-sidebar-left.png" alt="WinUI-ey app the agent drove with the testing skill"></div>
+      <div class="right"><img class="shot" src="img/era-04-sidebar-left.png" alt="WinUI app the agent drove with the testing skill"></div>
     </div>
   </section>
 
   <!-- 8. TODAY — DAG -->
   <section class="slide">
-    <div class="chapter">…and pivot again</div>
-    <div class="kicker">Outgrew the notebook. Went directed-graph.</div>
+    <div class="chapter">Switching to a DAG</div>
     <div class="body">
       <div class="left">
         <div class="prompt">can we review the flow of the "graph" — shouldn't there be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs? to make this more batchable…</div>
-        <div class="takeaway"><b>Another full UI pivot.</b> Buckets, parallel branches, wires you can pin. An afternoon, not a sprint.</div>
       </div>
-      <div class="right"><img class="shot" src="img/era-08-dag-loaded.png" alt="Current DAG canvas with Transcribe + Show Notes + Highlight Picker effects loaded"></div>
+      <div class="right"><img class="shot" src="img/era-08-dag-loaded.png" alt="DAG canvas with Transcribe + Show Notes + Highlight Picker effects"></div>
     </div>
   </section>
 
   <!-- 9. PLUG IN WINDOWS AI -->
   <section class="slide">
-    <div class="chapter">Wire in Windows AI</div>
-    <div class="kicker">Specific platform APIs, requested by name.</div>
+    <div class="chapter">Pluggable LLM backend</div>
     <div class="body">
       <div class="left">
         <div class="prompt">for the ones that use phi silica, could we maybe add a way to change the model to use things like foundry local so it can be configured?</div>
-        <div class="takeaway"><b>Pluggable LLM backends in one prompt.</b> Phi Silica on the NPU for built-in models, Foundry Local for anything else — same effect, swappable engine.</div>
+        <div class="caption">Phi Silica on the NPU for built-in models; Foundry Local for anything else.</div>
       </div>
-      <div class="right"><img class="shot" src="img/era-09-phi-silica.png" alt="Show Notes step with Phi Silica / Foundry Local language model picker"></div>
+      <div class="right"><img class="shot" src="img/era-09-phi-silica.png" alt="Show Notes step with Phi Silica / Foundry Local model picker"></div>
     </div>
   </section>
 
-  <!-- 10. LESSON / THANKS -->
+  <!-- 10. RECAP -->
   <section class="slide">
-    <div class="chapter">The takeaway</div>
-    <div class="kicker">Why AI dev changes how you build WinUI apps.</div>
-    <h2>You don't have to know what you want.</h2>
+    <div class="chapter">Recap</div>
     <ul class="lessons">
-      <li><b>POC quickly.</b> An idea-shaped prompt becomes a working app in one sitting.</li>
-      <li><b>Change your mind.</b> Multiple UI pivots. One codebase. No regrets.</li>
-      <li><b>Wire it to real hardware.</b> NPU, Phi Silica, Foundry Local — all asked for by name.</li>
-      <li><b>Skills do the heavy lifting.</b> WinUI dev-workflow, design, UI-testing, packaging.</li>
+      <li>Started from a prompt; got a working app in one sitting.</li>
+      <li>Pivoted the UI multiple times in the same codebase.</li>
+      <li>Wired in real hardware: NPU, Phi Silica, Foundry Local.</li>
+      <li>Used skills for WinUI dev workflow, design, UI testing, packaging.</li>
     </ul>
-    <p class="lede" style="margin-top:auto"><span style="color:var(--teal-bright)">github.com/nmetulev/contoso-studio</span> · built with Copilot CLI + WinUI 3 + Windows AI</p>
+    <p class="lede" style="margin-top:auto">github.com/nmetulev/contoso-studio</p>
   </section>
 
 </div>
 
 <div class="chrome">
-  <div class="brand">Contoso Studio · the journey</div>
+  <div class="brand">Contoso Studio</div>
   <div class="hint">← → space · F = fullscreen</div>
   <div class="nav"><span id="cur">1</span> / <span id="tot">10</span></div>
 </div>
