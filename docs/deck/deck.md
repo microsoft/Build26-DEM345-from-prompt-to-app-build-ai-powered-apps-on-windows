@@ -118,13 +118,26 @@ plainText: true
 - Roslyn analyzers
 - `winapp ui`
 
-+++ layout = "center", notes = "DEMO — 2 min. Manually: dotnet new winui, winapp run --debug-output, winui-search for a sample. Show how an agent would use the same tools.", hidden = "true"
++++
 
-# Demo: how agents use these tools
+# Benchmarking our winui-dev agent
+##aka.ms/winui-skills
 
-> dotnet new winui
-> winapp run --debug-output
-> winui-search
+LLMs are so good now, they can brute force any prompt, but it comes at a cost.
+
+@click
+We measure and try to optimize for:
+* token usage
+* time
+* code quality
+* ui quality
+* functionality
+* scenario specific requirements
+
+Our goal is to enable agents to build WinUI apps end to end, and to minimize token usage. 
+
+@click
+##We have decreased token usage by up to 70% over our initial benchmarks.
 
 +++ spacing = "1", notes = "1 min. The APIs are what make this real. Name the platform pieces actually powering Contoso Studio."
 
@@ -145,19 +158,10 @@ plainText: true
 @color(cyan)
 > Local-first. Hardware-aware. Native.
 
-+++ layout = "center", notes = "DEMO — 5 min. Pick an effect that finishes in <5 min and uses the winml CLI. Kick off the prompt, then switch to slides while it runs.", hidden = "true"
-
-# Demo: add a new effect
-
-> Prompt the agent to add it. Let it cook.
-
-+++ spacing = "1", notes = "While the prompt runs — walk the WinML CLI flow. This is the technical credibility moment.", hidden = "true"
++++ spacing = "1", notes = "While the prompt runs — walk the WinML CLI flow. This is the technical credibility moment."
 
 # WinML CLI
-
-## Optimize a model for this machine
-
-- @link(winml/winml-cli.html, "Open the WinML CLI overview")
+##aka.ms/[TODO LINK]
 
 @click
 - Pick a model
@@ -169,12 +173,6 @@ plainText: true
 @click
 @color(cyan)
 > Model  →  optimized  →  pipeline effect.
-
-+++ layout = "center", notes = "DEMO — 2 min. Back to Contoso Studio. Hopefully the effect is done. Have a backup recording if not. Show what the agent actually changed.", hidden = "true"
-
-# Demo: the new effect, live
-
-> See what the agent did. Drop it into the pipeline.
 
 +++ spacing = "1"
 
@@ -202,10 +200,6 @@ plainText: true
 # One more thing
 
 ## This machine can run a big local LLM ...
-
-+++ spacing = "1", notes = "Recap the value of iterating with agents. Quick, punchy.", hidden = "true"
-
-# Why iterate with agents
 
 +++ spacing = "1"
 
