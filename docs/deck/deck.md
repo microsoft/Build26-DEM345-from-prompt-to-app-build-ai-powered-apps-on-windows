@@ -37,81 +37,43 @@ plainText: true
 @click
 ## Act 2 - Make it real with AI platform integrations
 
-+++ layout = "center", notes = "DEMO — 3 min. Walk through Contoso Studio. Joke: 'look for it in a Microsoft Store near you.' Just walk the scenario — import media, run pipeline, show artifacts.", hidden = "true"
-
-# Demo: Contoso Studio
-
-> Coming to a Microsoft Store near you 😉
-
-+++ spacing = "1", notes = "2 min. We used the skills to build this and iterate — we didn't really know what it was going to be when we started. Iteration with agents let us change our mind cheaply.", hidden = "true"
-
-# We didn't know what it would be
-
-## We built it with skills — and changed our minds a lot
-
-@click
-- Started as "a video tool"
-@click
-- Became a node-based pipeline
-@click
-- Then a creator workflow with AI effects
-@click
-@color(cyan)
-> Agents make it cheap to be wrong.
-
 +++ layout = "center", notes = "The first prompt. Generic video studio sample-app shell."
 
 ![era-prebrand](contoso-studio-journey/img/era-prebrand-loaded.png){width=95%, height=75%}
 
 > i was thinking of building a media application that uses a combination of ml models and media processing in containers… could I ask you to think about some realistic things we could do for the container side?
 
-+++ layout = "center", notes = "Brand and layout. Name 'Contoso Studio', teal palette, icon, four-panel layout."
-
-![era-postbrand](contoso-studio-journey/img/era-postbrand-loaded.png){width=95%, height=75%}
-
-> right now it looks like a sample app — can we make it look like a real brand, can we design some ideas?
-
 +++ layout = "center", notes = "Iterating on layout — first commit."
 
 ![era-firstcommit](contoso-studio-journey/img/era-firstcommit-loaded.png){width=95%, height=75%}
+
+> right now it looks like a sample app — can we make it look like a real brand, can we design some ideas?
 
 > can we have a nice preview/live playback… the titlebar is broken… nice drag and drop of effects… the panes need more separation. can we move things around — sources top, effects bottom, full progress on the right…
 
 +++ layout = "center", notes = "New UI direction: notebook for video processing."
 
-![era-notebook](contoso-studio-journey/img/era-02-3col-navigationview.png){width=95%, height=75%}
-
-> could we do a thing like a Jupyter notebook almost, but for video processing? Build your own pipeline with steps you can add, remove, move around, and see input/output directly inline.
-
-+++ layout = "center", notes = "WinUI polish — titlebar actions."
-
 ![era-titlebar](contoso-studio-journey/img/era-05-titlebar-actions.png){width=95%, height=75%}
 
-> big part of the goal is to demonstrate native winui — make it as pretty and winui-ey as possible, like a real production app for power users on a desktop.
+> I'm not excited about this. could we redo the ui and try a thing like a Jupiter notebook, but for video processing? Build your own pipeline with steps you can add, remove, move around, and see input/output directly inline.
 
 +++ layout = "center", notes = "YOLO ONNX inference on the NPU via Windows ML + QNN."
 
 ![era-npu](contoso-studio-journey/img/era-06-always-expanded-cards.png){width=95%, height=75%}
 
-> i need to make this as real as possible right now. let's try to get the yolo effect working — right now it falls back to demo and doesn't run on the npu.
-
-+++ layout = "center", notes = "UI testing skill — agent drives the app: inspects visual tree, clicks, screenshots, fixes."
-
-![era-uitest](contoso-studio-journey/img/era-04-sidebar-left.png){width=95%, height=75%}
-
-> seeing this — take a look and please use the ui-testing skill to get screenshots and inspect elements to debug until it works.
+> we need to make this as real as possible. let's try to get the yolo effect working and please use the ui-testing skill to debug until it works.
 
 +++ layout = "center", notes = "Switching to a DAG — outputs lead to multiple inputs."
 
 ![era-dag](contoso-studio-journey/img/era-08-dag-loaded.png){width=95%, height=75%}
 
-> can we review the flow of the 'graph' — shouldn't there be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs? to make this more batchable…
+> the linear flow doesn't make sense - let's rethink this to be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs? 
 
-+++ layout = "center", notes = "Pluggable LLM backend — Phi Silica on the NPU; Foundry Local for anything else."
++++ layout = "center", notes = "Pluggable LLM backend — Phi Silica on the NPU; Foundry Local for anything else.", hidden = "true"
 
 ![era-phi-silica](contoso-studio-journey/img/era-09-phi-silica.png){width=95%, height=75%}
 
-> for the ones that use phi silica, could we maybe add a way to change the model to use things like foundry local so it can be configured?
+> for the effects that depend on phi silica, let's add a way to change the model to use things like foundry local so it can be configured?
 
 +++ spacing = "1", notes = "1 min. Recap what makes this possible. Don't dwell — just name the pieces and tell people to try it.", hidden = "true"
 
@@ -156,10 +118,6 @@ plainText: true
 - Roslyn analyzers
 - `winapp ui`
 
-@click
-@color(white)
-> Same affordances. Just exposed to the terminal.
-
 +++ layout = "center", notes = "DEMO — 2 min. Manually: dotnet new winui, winapp run --debug-output, winui-search for a sample. Show how an agent would use the same tools.", hidden = "true"
 
 # Demo: how agents use these tools
@@ -187,7 +145,7 @@ plainText: true
 @color(cyan)
 > Local-first. Hardware-aware. Native.
 
-+++ layout = "center", notes = "DEMO — 5 min. Pick an effect that finishes in <5 min and uses the winml CLI. Kick off the prompt, then switch to slides while it runs."
++++ layout = "center", notes = "DEMO — 5 min. Pick an effect that finishes in <5 min and uses the winml CLI. Kick off the prompt, then switch to slides while it runs.", hidden = "true"
 
 # Demo: add a new effect
 
@@ -253,9 +211,8 @@ plainText: true
 
 # Thank you
 
-Please complete the session evaluation:
-
-TODO: update from build slide templates
+![qr](images/qr.jpg)
+Visit `aka.ms/build/evals` or scan the QR code to fill out a session survey
 
 ## aka.ms/winui-skills
-## aka.ms/todo-other links
+## aka.ms/winappcli
