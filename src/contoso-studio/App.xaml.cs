@@ -65,5 +65,8 @@ public partial class App : Application
     {
         _window = new MainWindow();
         _window.Activate();
+
+        var ui = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        _ = Services.LanguageModelRegistry.EnsureFoundryCatalogLoadedAsync(ui);
     }
 }

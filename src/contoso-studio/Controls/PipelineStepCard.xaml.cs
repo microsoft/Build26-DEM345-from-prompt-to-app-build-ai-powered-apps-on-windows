@@ -9,6 +9,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using VideoStudio.Models;
+using VideoStudio.Services;
+using Windows.Media.Core;
 
 namespace VideoStudio.Controls;
 
@@ -24,10 +26,44 @@ public sealed partial class PipelineStepCard : UserControl
         set => SetValue(StepProperty, value);
     }
 
+    public static readonly DependencyProperty IsCardSelectedProperty =
+        DependencyProperty.Register(nameof(IsCardSelected), typeof(bool), typeof(PipelineStepCard),
+            new PropertyMetadata(false, OnIsCardSelectedChanged));
+
+    /// <summary>True when this card is the "focused" card in the pipeline canvas (expanded layout).</summary>
+    public bool IsCardSelected
+    {
+        get => (bool)GetValue(IsCardSelectedProperty);
+        set => SetValue(IsCardSelectedProperty, value);
+    }
+
+    private static void OnIsCardSelectedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not PipelineStepCard card) return;
+        card.ApplySelectedVisual((bool)e.NewValue);
+    }
+
+    private void ApplySelectedVisual(bool selected)
+    {
+        if (CardBorder == null) return;
+        if (selected)
+        {
+            CardBorder.BorderThickness = new Thickness(2);
+            CardBorder.BorderBrush = (Brush)Application.Current.Resources["AccentTealBrush"];
+        }
+        else
+        {
+            CardBorder.BorderThickness = new Thickness(1);
+            CardBorder.BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"];
+        }
+    }
+
+    /// <summary>Raised when the user clicks anywhere on the card background (not a button).</summary>
+    public event EventHandler? SelectionRequested;
+
     public event EventHandler? RunStepRequested;
+    public event EventHandler? CancelStepRequested;
     public event EventHandler? RemoveRequested;
-    public event EventHandler? MoveUpRequested;
-    public event EventHandler? MoveDownRequested;
 
     /// <summary>
     /// Callback to enumerate producers compatible with a given input pin on this step.
@@ -48,6 +84,39 @@ public sealed partial class PipelineStepCard : UserControl
     public PipelineStepCard()
     {
         this.InitializeComponent();
+        this.Tapped += OnCardTapped;
+        this.Unloaded += OnCardUnloaded;
+        Services.LanguageModelRegistry.Catalog.CollectionChanged += OnLanguageModelCatalogChanged;
+    }
+
+    private void OnLanguageModelCatalogChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        // Live Foundry catalog finished loading — refresh chip label so users
+        // see the proper display name instead of the raw backend id.
+        if (Step is { } step) UpdateLanguageModelChip(step);
+    }
+
+    private void OnCardTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        // Tapped bubbles up after Buttons mark it handled, so clicks on Run/Remove/etc.
+        // won't trigger card selection. Clicks on text/icons/background will.
+        SelectionRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnCardUnloaded(object sender, RoutedEventArgs e)
+    {
+        Services.LanguageModelRegistry.Catalog.CollectionChanged -= OnLanguageModelCatalogChanged;
+        // Free the inline player when the card is removed from the visual tree.
+        try
+        {
+            if (MatchesPlayer != null)
+            {
+                MatchesPlayer.MediaPlayer?.Pause();
+                MatchesPlayer.Source = null;
+            }
+        }
+        catch { }
+        _matchesPlayerSourcePath = null;
     }
 
     private static void OnStepChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -103,15 +172,26 @@ public sealed partial class PipelineStepCard : UserControl
             case nameof(PipelineStep.Description):
                 DescriptionText.Text = step.Description;
                 break;
+            case nameof(PipelineStep.LanguageModelBackendId):
+                UpdateLanguageModelChip(step);
+                break;
             case nameof(PipelineStep.State):
             case nameof(PipelineStep.StateIcon):
             case nameof(PipelineStep.IsRunning):
                 StateIconElement.Glyph = step.StateIcon;
                 RunningRing.Visibility = step.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+                UpdateRunButton(step);
                 UpdateVisualState(step);
                 UpdateArtifactsToggleVisibility(step);
                 UpdateDeviceBadge(step);
-                if (step.IsDone) ArtifactsExpander.IsExpanded = true; // auto-open on completion
+                UpdateHwBarsVisibility(step);
+                if (step.IsDone)
+                {
+                    ArtifactsExpander.IsExpanded = true; // auto-open on completion
+                    // If we'd auto-switched to Logs during running, swap to the
+                    // result tab now that data is available.
+                    if (_activeTab == TabLogs) SwitchToResultTab(step);
+                }
                 break;
             case nameof(PipelineStep.EngineBadge):
                 EngineBadgeText.Text = step.EngineBadge;
@@ -127,6 +207,14 @@ public sealed partial class PipelineStepCard : UserControl
             case nameof(PipelineStep.LogOutput):
                 LogText.Text = step.LogOutput;
                 UpdateArtifactsToggleVisibility(step);
+                // While running, auto-open the artifacts panel and surface the Logs
+                // tab so the user can watch progress — previously logs were hidden
+                // until the run completed.
+                if (step.IsRunning && !string.IsNullOrEmpty(step.LogOutput))
+                {
+                    ArtifactsExpander.IsExpanded = true;
+                    if (_activeTab != TabLogs) SelectTab(TabLogs);
+                }
                 // Auto-scroll to the bottom while running
                 LogScrollViewer?.ChangeView(null, double.MaxValue, null, disableAnimation: true);
                 break;
@@ -179,6 +267,12 @@ public sealed partial class PipelineStepCard : UserControl
                 UpdateClipsPane(step);
                 UpdateArtifactsToggleVisibility(step);
                 break;
+            case nameof(PipelineStep.FrameMatches):
+            case nameof(PipelineStep.HasFrameMatches):
+            case nameof(PipelineStep.FrameMatchCount):
+                UpdateMatchesPane(step);
+                UpdateArtifactsToggleVisibility(step);
+                break;
             case nameof(PipelineStep.DeviceUsedLabel):
             case nameof(PipelineStep.HasDeviceUsed):
             case nameof(PipelineStep.DurationMs):
@@ -186,12 +280,15 @@ public sealed partial class PipelineStepCard : UserControl
                 break;
             case nameof(PipelineStep.CpuUsage):
                 HwBars.CpuValue = step.CpuUsage;
+                UpdateHwBarsVisibility(step);
                 break;
             case nameof(PipelineStep.GpuUsage):
                 HwBars.GpuValue = step.GpuUsage;
+                UpdateHwBarsVisibility(step);
                 break;
             case nameof(PipelineStep.NpuUsage):
                 HwBars.NpuValue = step.NpuUsage;
+                UpdateHwBarsVisibility(step);
                 break;
             case nameof(PipelineStep.MemoryUsageMB):
                 HwBars.MemoryValue = step.MemoryUsageMB;
@@ -204,10 +301,12 @@ public sealed partial class PipelineStepCard : UserControl
         if (StepNameText == null) return;
         StepNameText.Text = step.Name;
         DescriptionText.Text = step.Description;
+        UpdateLanguageModelChip(step);
         StateIconElement.Glyph = step.StateIcon;
         EngineBadgeText.Text = step.EngineBadge;
         DurationTextBlock.Text = step.DurationText;
         RunningRing.Visibility = step.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRunButton(step);
         ResultSummaryText.Text = step.ResultSummary;
         ResultSummaryText.Visibility = step.HasResult ? Visibility.Visible : Visibility.Collapsed;
         LogText.Text = step.LogOutput;
@@ -215,6 +314,14 @@ public sealed partial class PipelineStepCard : UserControl
         HwBars.GpuValue = step.GpuUsage;
         HwBars.NpuValue = step.NpuUsage;
         HwBars.MemoryValue = step.MemoryUsageMB;
+        HwBars.PrimaryDevice = step.Engine switch
+        {
+            VideoStudio.Models.EngineType.WindowsML => HardwareUsageBars.PrimaryDeviceKind.Npu,
+            VideoStudio.Models.EngineType.WindowsAI => HardwareUsageBars.PrimaryDeviceKind.Npu,
+            VideoStudio.Models.EngineType.LinuxContainer => HardwareUsageBars.PrimaryDeviceKind.Cpu,
+            _ => HardwareUsageBars.PrimaryDeviceKind.None,
+        };
+        UpdateHwBarsVisibility(step);
         UpdatePreviewPane(step);
         UpdateDetectionsPane(step);
         UpdateTranscriptPane(step);
@@ -223,12 +330,23 @@ public sealed partial class PipelineStepCard : UserControl
         UpdateNotesPane(step);
         UpdateHighlightsPane(step);
         UpdateClipsPane(step);
+        UpdateMatchesPane(step);
         UpdateFilesPane(step);
         UpdateOptionsButton(step);
         UpdateDeviceBadge(step);
         UpdateArtifactsToggleVisibility(step);
         UpdateVisualState(step);
         RebuildPinChips(step);
+    }
+
+    private void UpdateHwBarsVisibility(PipelineStep step)
+    {
+        // Show the HW chip strip only when there's something meaningful to convey —
+        // either the step is actively running or it has completed (showing peak figures).
+        bool hasHwActivity = step.IsRunning
+            || step.State == VideoStudio.Models.PipelineStepState.Done
+            || step.CpuUsage > 0 || step.GpuUsage > 0 || step.NpuUsage > 0;
+        HwBars.Visibility = hasHwActivity ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ClearAll()
@@ -421,16 +539,23 @@ public sealed partial class PipelineStepCard : UserControl
 
     private void UpdateArtifactsToggleVisibility(PipelineStep step)
     {
-        bool hasArtifacts = step.HasOutput
-            || step.HasDetections
-            || step.HasTranscript
-            || step.HasSilence
-            || step.HasChapters
-            || step.HasShowNotes
-            || step.HasHighlights
-            || step.HasExportedClips
-            || !string.IsNullOrEmpty(step.LogOutput)
-            || !string.IsNullOrEmpty(step.InputVideoPath);
+        bool isFindFramesStep = string.Equals(step.Id, "find-frames", StringComparison.OrdinalIgnoreCase);
+        // While a step is running, surface the logs immediately so the user can see
+        // progress (don't make them wait for the run to finish before any log lines
+        // appear). Treat a non-empty LogOutput as an artifact in that case.
+        bool hasRunningLogs = step.IsRunning && !string.IsNullOrEmpty(step.LogOutput);
+        bool hasArtifacts = hasRunningLogs || (isFindFramesStep
+            ? step.HasFrameMatches // find-frames: only show artifacts after a successful run
+            : (step.HasOutput
+                || step.HasDetections
+                || step.HasTranscript
+                || step.HasSilence
+                || step.HasChapters
+                || step.HasShowNotes
+                || step.HasHighlights
+                || step.HasExportedClips
+                || !string.IsNullOrEmpty(step.LogOutput)
+                || !string.IsNullOrEmpty(step.InputVideoPath)));
         ArtifactsExpander.Visibility = hasArtifacts ? Visibility.Visible : Visibility.Collapsed;
 
         // Tab visibility — gated per step type
@@ -440,14 +565,18 @@ public sealed partial class PipelineStepCard : UserControl
         bool isShowNotes = string.Equals(step.Id, "show-notes", StringComparison.OrdinalIgnoreCase);
         bool isHighlights = string.Equals(step.Id, "highlight-picker", StringComparison.OrdinalIgnoreCase);
         bool isClips = string.Equals(step.Id, "export-clips", StringComparison.OrdinalIgnoreCase);
+        bool isFindFrames = string.Equals(step.Id, "find-frames", StringComparison.OrdinalIgnoreCase);
         TabTranscript.Visibility = isTranscribe ? Visibility.Visible : Visibility.Collapsed;
         TabSilence.Visibility = isSilence ? Visibility.Visible : Visibility.Collapsed;
         TabChapters.Visibility = isChapters ? Visibility.Visible : Visibility.Collapsed;
         TabNotes.Visibility = isShowNotes ? Visibility.Visible : Visibility.Collapsed;
         TabHighlights.Visibility = isHighlights ? Visibility.Visible : Visibility.Collapsed;
         TabClips.Visibility = isClips ? Visibility.Visible : Visibility.Collapsed;
+        TabMatches.Visibility = isFindFrames ? Visibility.Visible : Visibility.Collapsed;
         TabDetections.Visibility = string.Equals(step.Id, "detect-objects", StringComparison.OrdinalIgnoreCase)
             ? Visibility.Visible : Visibility.Collapsed;
+        // Find-frames hides the redundant "Preview" tab (Matches has its own player)
+        TabPreview.Visibility = isFindFrames ? Visibility.Collapsed : Visibility.Visible;
 
         if (hasArtifacts && _activeTab == null)
         {
@@ -458,11 +587,35 @@ public sealed partial class PipelineStepCard : UserControl
             else if (isShowNotes && step.HasShowNotes) SelectTab(TabNotes);
             else if (isHighlights && step.HasHighlights) SelectTab(TabHighlights);
             else if (isClips && step.HasExportedClips) SelectTab(TabClips);
+            else if (isFindFrames && step.HasFrameMatches) SelectTab(TabMatches);
             else if (step.HasOutput) SelectTab(TabPreview);
             else if (step.HasDetections) SelectTab(TabDetections);
             else if (!string.IsNullOrEmpty(step.LogOutput)) SelectTab(TabLogs);
             else SelectTab(TabFiles);
         }
+    }
+
+    /// <summary>Pick the most relevant tab for a step that just finished, used to
+    /// move the user away from the Logs tab we auto-selected during running.</summary>
+    private void SwitchToResultTab(PipelineStep step)
+    {
+        bool isTranscribe = string.Equals(step.Id, "transcribe", StringComparison.OrdinalIgnoreCase);
+        bool isSilence = string.Equals(step.Id, "detect-silence", StringComparison.OrdinalIgnoreCase);
+        bool isChapters = string.Equals(step.Id, "chapter-markers", StringComparison.OrdinalIgnoreCase);
+        bool isShowNotes = string.Equals(step.Id, "show-notes", StringComparison.OrdinalIgnoreCase);
+        bool isHighlights = string.Equals(step.Id, "highlight-picker", StringComparison.OrdinalIgnoreCase);
+        bool isClips = string.Equals(step.Id, "export-clips", StringComparison.OrdinalIgnoreCase);
+        bool isFindFrames = string.Equals(step.Id, "find-frames", StringComparison.OrdinalIgnoreCase);
+        if (isTranscribe && step.HasTranscript) SelectTab(TabTranscript);
+        else if (isSilence && step.HasSilence) SelectTab(TabSilence);
+        else if (isChapters && step.HasChapters) SelectTab(TabChapters);
+        else if (isShowNotes && step.HasShowNotes) SelectTab(TabNotes);
+        else if (isHighlights && step.HasHighlights) SelectTab(TabHighlights);
+        else if (isClips && step.HasExportedClips) SelectTab(TabClips);
+        else if (isFindFrames && step.HasFrameMatches) SelectTab(TabMatches);
+        else if (step.HasOutput) SelectTab(TabPreview);
+        else if (step.HasDetections) SelectTab(TabDetections);
+        // Otherwise stay on Logs — that's the most useful view when nothing else exists.
     }
 
     private void UpdateOptionsButton(PipelineStep step)
@@ -476,6 +629,7 @@ public sealed partial class PipelineStepCard : UserControl
         bool isShowNotes = string.Equals(step.Id, "show-notes", StringComparison.OrdinalIgnoreCase);
         bool isWinML = step.Engine == EngineType.WindowsML;
         bool usesLm = isChapters || isHighlights || isShowNotes;
+        bool isFindFrames = string.Equals(step.Id, "find-frames", StringComparison.OrdinalIgnoreCase);
 
         OptionsButton.Visibility = (isDetect || isTranscribe || isSilence || isSmartCut || isChapters || isHighlights || isShowNotes || isWinML) ? Visibility.Visible : Visibility.Collapsed;
         OptionsConfidencePanel.Visibility = isDetect ? Visibility.Visible : Visibility.Collapsed;
@@ -486,6 +640,10 @@ public sealed partial class PipelineStepCard : UserControl
         OptionsChaptersPanel.Visibility = isChapters ? Visibility.Visible : Visibility.Collapsed;
         OptionsHighlightsPanel.Visibility = isHighlights ? Visibility.Visible : Visibility.Collapsed;
         OptionsLanguageModelPanel.Visibility = usesLm ? Visibility.Visible : Visibility.Collapsed;
+        OptionsFindFramesPanel.Visibility = isFindFrames ? Visibility.Visible : Visibility.Collapsed;
+        // Show inline prompt input on the card surface for find-frames so the user
+        // can see/edit what they're searching for without opening the gear flyout.
+        InlineFindPromptPanel.Visibility = isFindFrames ? Visibility.Visible : Visibility.Collapsed;
         // Hardware combo only makes sense for steps that actually pick an EP. DSP/ffmpeg/Phi-Silica steps don't.
         OptionsHardwarePanel.Visibility = (isWinML && !isSilence && !isSmartCut) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -540,6 +698,15 @@ public sealed partial class PipelineStepCard : UserControl
             OptionsHighlightClipSecSlider.Value = Math.Clamp(step.HighlightClipSeconds, 10, 120);
             OptionsHighlightClipSecValueText.Text = $"{(int)OptionsHighlightClipSecSlider.Value}s";
         }
+        if (isFindFrames)
+        {
+            OptionsFindPromptBox.Text = step.FrameSearchPrompt ?? string.Empty;
+            InlineFindPromptBox.Text = step.FrameSearchPrompt ?? string.Empty;
+            OptionsFindFramesSlider.Value = Math.Clamp(step.FrameSearchStrideSeconds, 1, 30);
+            OptionsFindFramesValueText.Text = $"every {(int)OptionsFindFramesSlider.Value}s";
+            OptionsFindTopKSlider.Value = Math.Clamp(step.FrameSearchTopK, 1, 20);
+            OptionsFindTopKValueText.Text = $"{(int)OptionsFindTopKSlider.Value}";
+        }
         if (isWinML && !isSilence && !isSmartCut)
         {
             OptionsHardwareCombo.SelectedIndex = (int)step.HardwarePreference;
@@ -566,8 +733,43 @@ public sealed partial class PipelineStepCard : UserControl
     {
         if (_suppressOptionsHandlers || Step is not { } step) return;
         if (OptionsLanguageModelCombo.SelectedItem is not Services.LanguageModelRegistry.Entry entry) return;
+        if (!entry.IsEnabled) return; // loading / unavailable placeholder
         step.LanguageModelBackendId = entry.Id;
+        Services.LanguageModelRegistry.LastUsedBackendId = entry.Id;
         OptionsLanguageModelTagline.Text = entry.Tagline ?? string.Empty;
+        UpdateLanguageModelChip(step);
+    }
+
+    private void UpdateLanguageModelChip(PipelineStep step)
+    {
+        if (InlineLanguageModelChip == null) return;
+
+        bool usesLm = string.Equals(step.Id, "chapter-markers", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(step.Id, "show-notes", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(step.Id, "highlight-picker", StringComparison.OrdinalIgnoreCase);
+        if (!usesLm)
+        {
+            InlineLanguageModelChip.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var id = step.LanguageModelBackendId ?? Services.PhiSilicaLanguageModel.BackendId;
+        string label = id;
+        for (int i = 0; i < Services.LanguageModelRegistry.Catalog.Count; i++)
+        {
+            if (string.Equals(Services.LanguageModelRegistry.Catalog[i].Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                label = Services.LanguageModelRegistry.Catalog[i].DisplayName;
+                break;
+            }
+        }
+        // Fallback prettify when the live catalog hasn't loaded yet — strip the
+        // "foundry:" prefix so we don't show a raw backend id.
+        if (label == id && id.StartsWith(Services.FoundryLocalLanguageModel.IdPrefix, StringComparison.OrdinalIgnoreCase))
+            label = "Foundry · " + id.Substring(Services.FoundryLocalLanguageModel.IdPrefix.Length);
+
+        InlineLanguageModelText.Text = label;
+        InlineLanguageModelChip.Visibility = Visibility.Visible;
     }
 
     private bool _languageItemsInitialized;
@@ -670,6 +872,56 @@ public sealed partial class PipelineStepCard : UserControl
         if (_suppressOptionsHandlers || Step is not { } step) return;
         step.HighlightClipSeconds = (int)OptionsHighlightClipSecSlider.Value;
         OptionsHighlightClipSecValueText.Text = $"{(int)OptionsHighlightClipSecSlider.Value}s";
+    }
+
+    private void OnOptionsFindPromptChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressOptionsHandlers || Step is not { } step) return;
+        step.FrameSearchPrompt = OptionsFindPromptBox.Text;
+        // Mirror to inline box so the two stay in sync.
+        if (InlineFindPromptBox.Text != OptionsFindPromptBox.Text)
+        {
+            _suppressOptionsHandlers = true;
+            InlineFindPromptBox.Text = OptionsFindPromptBox.Text;
+            _suppressOptionsHandlers = false;
+        }
+    }
+
+    private void OnInlineFindPromptChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_suppressOptionsHandlers || Step is not { } step) return;
+        step.FrameSearchPrompt = InlineFindPromptBox.Text;
+        if (OptionsFindPromptBox.Text != InlineFindPromptBox.Text)
+        {
+            _suppressOptionsHandlers = true;
+            OptionsFindPromptBox.Text = InlineFindPromptBox.Text;
+            _suppressOptionsHandlers = false;
+        }
+    }
+
+    /// <summary>
+    /// Selecting the inline prompt TextBox (or any inner control that swallows the
+    /// Tapped event) should still select/expand the parent card so the user can
+    /// see what they're typing into. The card's Tapped handler doesn't fire for
+    /// TextBox clicks because TextBox marks the event handled.
+    /// </summary>
+    private void OnInlineFindPromptGotFocus(object sender, RoutedEventArgs e)
+    {
+        SelectionRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnOptionsFindFramesChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_suppressOptionsHandlers || Step is not { } step) return;
+        step.FrameSearchStrideSeconds = OptionsFindFramesSlider.Value;
+        OptionsFindFramesValueText.Text = $"every {(int)OptionsFindFramesSlider.Value}s";
+    }
+
+    private void OnOptionsFindTopKChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (_suppressOptionsHandlers || Step is not { } step) return;
+        step.FrameSearchTopK = (int)OptionsFindTopKSlider.Value;
+        OptionsFindTopKValueText.Text = $"{(int)OptionsFindTopKSlider.Value}";
     }
 
     private void UpdateChaptersPane(PipelineStep step)
@@ -832,6 +1084,59 @@ public sealed partial class PipelineStepCard : UserControl
         }
     }
 
+    // ===== Matches pane (find-frames) =====
+    private string? _matchesPlayerSourcePath;
+
+    private void UpdateMatchesPane(PipelineStep step)
+    {
+        if (MatchesList == null) return;
+        // Only load the player source after the step has produced matches —
+        // otherwise the card shows a "ready to play" video before the user has run anything.
+        string? sourcePath = step.HasFrameMatches
+            ? (step.InputVideoPath ?? step.OutputVideoPath)
+            : null;
+        if (!string.IsNullOrEmpty(sourcePath) && sourcePath != _matchesPlayerSourcePath)
+        {
+            try
+            {
+                MatchesPlayer.Source = MediaSource.CreateFromUri(new Uri(sourcePath));
+                _matchesPlayerSourcePath = sourcePath;
+            }
+            catch
+            {
+                MatchesPlayer.Source = null;
+                _matchesPlayerSourcePath = null;
+            }
+        }
+        else if (string.IsNullOrEmpty(sourcePath) && _matchesPlayerSourcePath != null)
+        {
+            MatchesPlayer.Source = null;
+            _matchesPlayerSourcePath = null;
+        }
+        if (step.HasFrameMatches && step.FrameMatches is { } result)
+        {
+            MatchesList.ItemsSource = result.Matches;
+            MatchesSummary.Text = $"Prompt: \"{result.Prompt}\"  •  {result.Matches.Count} of {result.FramesScanned} frames  •  {result.ElapsedMs} ms on {result.DeviceUsed}";
+        }
+        else
+        {
+            MatchesList.ItemsSource = null;
+            MatchesSummary.Text = "Run this step with a text prompt to see matching frames.";
+        }
+    }
+
+    private void OnMatchItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is not FrameMatch match) return;
+        var session = MatchesPlayer?.MediaPlayer?.PlaybackSession;
+        if (session == null) return;
+        try
+        {
+            session.Position = TimeSpan.FromSeconds(Math.Max(0, match.TimestampSeconds));
+            MatchesPlayer!.MediaPlayer.Play();
+        }
+        catch { }
+    }
     private void UpdateSilencePane(PipelineStep step)
     {
         if (step.HasSilence && step.Silence is { } s)
@@ -1020,6 +1325,7 @@ public sealed partial class PipelineStepCard : UserControl
         TabNotes.IsChecked = tab == TabNotes;
         TabHighlights.IsChecked = tab == TabHighlights;
         TabClips.IsChecked = tab == TabClips;
+        TabMatches.IsChecked = tab == TabMatches;
         TabLogs.IsChecked = tab == TabLogs;
         TabFiles.IsChecked = tab == TabFiles;
         PreviewPane.Visibility = tab == TabPreview ? Visibility.Visible : Visibility.Collapsed;
@@ -1030,6 +1336,12 @@ public sealed partial class PipelineStepCard : UserControl
         NotesPane.Visibility = tab == TabNotes ? Visibility.Visible : Visibility.Collapsed;
         HighlightsPane.Visibility = tab == TabHighlights ? Visibility.Visible : Visibility.Collapsed;
         ClipsPane.Visibility = tab == TabClips ? Visibility.Visible : Visibility.Collapsed;
+        MatchesPane.Visibility = tab == TabMatches ? Visibility.Visible : Visibility.Collapsed;
+        // Pause inline player when leaving the Matches tab so it doesn't keep playing in the background.
+        if (tab != TabMatches)
+        {
+            try { MatchesPlayer?.MediaPlayer?.Pause(); } catch { }
+        }
         LogsPane.Visibility = tab == TabLogs ? Visibility.Visible : Visibility.Collapsed;
         FilesPane.Visibility = tab == TabFiles ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1093,16 +1405,33 @@ public sealed partial class PipelineStepCard : UserControl
         catch { }
     }
 
-    private void OnRunStepClick(object sender, RoutedEventArgs e) =>
-        RunStepRequested?.Invoke(this, EventArgs.Empty);
+    private void OnRunStepClick(object sender, RoutedEventArgs e)
+    {
+        if (Step?.IsRunning == true)
+            CancelStepRequested?.Invoke(this, EventArgs.Empty);
+        else
+            RunStepRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void UpdateRunButton(PipelineStep step)
+    {
+        if (RunStepButton == null) return;
+        if (step.IsRunning)
+        {
+            RunStepButtonIcon.Glyph = "\uE71A"; // Cancel "X"
+            RunStepButtonText.Text = "Cancel";
+            RunStepButton.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCriticalBackgroundBrush"];
+            ToolTipService.SetToolTip(RunStepButton, "Cancel the running step");
+        }
+        else
+        {
+            RunStepButtonIcon.Glyph = "\uE768"; // Play
+            RunStepButtonText.Text = "Run Step";
+            RunStepButton.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTealBrush"];
+            ToolTipService.SetToolTip(RunStepButton, "Run this step (and any upstream steps that haven't finished yet)");
+        }
+    }
 
     private void OnRemoveClick(object sender, RoutedEventArgs e) =>
         RemoveRequested?.Invoke(this, EventArgs.Empty);
-
-    private void OnMoveUpClick(object sender, RoutedEventArgs e) =>
-        MoveUpRequested?.Invoke(this, EventArgs.Empty);
-
-    private void OnMoveDownClick(object sender, RoutedEventArgs e) =>
-        MoveDownRequested?.Invoke(this, EventArgs.Empty);
 }
-

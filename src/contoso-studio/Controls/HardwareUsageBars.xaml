@@ -5,90 +5,87 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Padding="8">
+    Padding="0">
 
-    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*"
-          RowSpacing="6" ColumnSpacing="16">
+    <!-- Compact horizontal chip strip — one pill per device.
+         The "primary" device for the step's engine is highlighted (filled background).
+         Hidden entirely when no device has any activity (gated from code-behind). -->
+    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
 
-        <!-- CPU -->
-        <StackPanel Grid.Row="0" Grid.Column="0"
-                    Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center">
-            <TextBlock Text="CPU" Width="32" FontSize="11"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-            <ProgressBar Value="{x:Bind CpuValue, Mode=OneWay}"
-                         Minimum="0" Maximum="100"
-                         MinWidth="80" Height="4"
-                         CornerRadius="2"
-                         Foreground="{ThemeResource AccentTealBrush}"
-                         VerticalAlignment="Center"/>
-            <TextBlock Text="{x:Bind CpuPercent, Mode=OneWay}"
-                       Width="32" FontSize="11"
-                       TextAlignment="Right"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
+        <!-- NPU chip (primary for WindowsML/WindowsAI steps) -->
+        <Border x:Name="NpuChip"
+                CornerRadius="10"
+                Padding="8,3"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse Width="6" Height="6" Fill="{StaticResource AccentTealBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="NPU" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="NpuValueText" Text="{x:Bind NpuPercent, Mode=OneTime}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
 
-        <!-- GPU -->
-        <StackPanel Grid.Row="0" Grid.Column="1"
-                    Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center">
-            <TextBlock Text="GPU" Width="32" FontSize="11"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-            <ProgressBar Value="{x:Bind GpuValue, Mode=OneWay}"
-                         Minimum="0" Maximum="100"
-                         MinWidth="80" Height="4"
-                         CornerRadius="2"
-                         Foreground="{StaticResource ContainerBadgeBrush}"
-                         VerticalAlignment="Center"/>
-            <TextBlock Text="{x:Bind GpuPercent, Mode=OneWay}"
-                       Width="32" FontSize="11"
-                       TextAlignment="Right"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
+        <!-- CPU chip (primary for LinuxContainer steps) -->
+        <Border x:Name="CpuChip"
+                CornerRadius="10"
+                Padding="8,3"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse Width="6" Height="6" Fill="{StaticResource ContainerBadgeBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="CPU" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="CpuValueText" Text="{x:Bind CpuPercent, Mode=OneTime}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
 
-        <!-- NPU -->
-        <StackPanel Grid.Row="1" Grid.Column="0"
-                    Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center">
-            <TextBlock Text="NPU" Width="32" FontSize="11"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-            <ProgressBar Value="{x:Bind NpuValue, Mode=OneWay}"
-                         Minimum="0" Maximum="100"
-                         MinWidth="80" Height="4"
-                         CornerRadius="2"
-                         Foreground="{StaticResource AccentTealBrush}"
-                         VerticalAlignment="Center"/>
-            <TextBlock Text="{x:Bind NpuPercent, Mode=OneWay}"
-                       Width="32" FontSize="11"
-                       TextAlignment="Right"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
+        <!-- GPU chip — usually quiet, kept as small subdued chip -->
+        <Border x:Name="GpuChip"
+                CornerRadius="10"
+                Padding="8,3"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse Width="6" Height="6" Fill="#7C3AED" VerticalAlignment="Center"/>
+                <TextBlock Text="GPU" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="GpuValueText" Text="{x:Bind GpuPercent, Mode=OneTime}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
 
-        <!-- RAM -->
-        <StackPanel Grid.Row="1" Grid.Column="1"
-                    Orientation="Horizontal" Spacing="6"
-                    VerticalAlignment="Center">
-            <TextBlock Text="RAM" Width="32" FontSize="11"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-            <ProgressBar Value="{x:Bind MemoryValue, Mode=OneWay}"
-                         Minimum="0" Maximum="100"
-                         MinWidth="80" Height="4"
-                         CornerRadius="2"
-                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                         VerticalAlignment="Center"/>
-            <TextBlock Text="{x:Bind MemoryPercent, Mode=OneWay}"
-                       Width="32" FontSize="11"
-                       TextAlignment="Right"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       VerticalAlignment="Center"/>
-        </StackPanel>
-
-    </Grid>
+        <!-- RAM chip — quiet but informative -->
+        <Border x:Name="RamChip"
+                CornerRadius="10"
+                Padding="8,3"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse Width="6" Height="6" Fill="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="RAM" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+                <TextBlock x:Name="RamValueText" Text="{x:Bind MemoryPercent, Mode=OneTime}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
 </UserControl>

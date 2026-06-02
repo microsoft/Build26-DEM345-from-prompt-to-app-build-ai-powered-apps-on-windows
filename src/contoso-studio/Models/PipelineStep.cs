@@ -61,8 +61,20 @@ public partial class PipelineStep : ObservableObject
     [ObservableProperty] public partial int HighlightTargetCount { get; set; } = 3;
     [ObservableProperty] public partial int HighlightClipSeconds { get; set; } = 30;
 
+    /// <summary>Find-frames (CLIP) options.</summary>
+    [ObservableProperty] public partial string FrameSearchPrompt { get; set; } = "a person smiling";
+    [ObservableProperty] public partial int FrameSearchTopK { get; set; } = 5;
+    /// <summary>
+    /// Sampling interval in seconds for the find-frames CLIP scan. A 5-minute video at 2s
+    /// stride is 150 frames; a 2-hour video at the same stride would be 3600 — we cap the
+    /// total at 600 in the executor so long videos don't run for tens of minutes on NPU.
+    /// </summary>
+    [ObservableProperty] public partial double FrameSearchStrideSeconds { get; set; } = 10.0;
+
     // Phase 9 — pluggable LLM backend for Chapter Markers / Show Notes / Highlights.
-    [ObservableProperty] public partial string LanguageModelBackendId { get; set; } = Services.PhiSilicaLanguageModel.BackendId;
+    // Defaults to the most recently picked backend so users don't have to re-select their
+    // preferred model on every new step. Non-LLM steps ignore the field.
+    [ObservableProperty] public partial string LanguageModelBackendId { get; set; } = Services.LanguageModelRegistry.LastUsedBackendId;
 
     /// <summary>Human-readable label of the device the step actually used (e.g. "NPU (QNN)" or "CPU"). Empty when never run.</summary>
     [ObservableProperty] public partial string DeviceUsedLabel { get; set; } = string.Empty;
@@ -105,6 +117,9 @@ public partial class PipelineStep : ObservableObject
 
     /// <summary>Exported clip files from the last run, populated by export-clips step.</summary>
     public System.Collections.Generic.IReadOnlyList<Services.ExportedClip> ExportedClips { get; private set; } = System.Array.Empty<Services.ExportedClip>();
+
+    /// <summary>Frame search matches (CLIP find-frames), populated by find-frames step.</summary>
+    public Services.FrameMatchesResult? FrameMatches { get; private set; }
 
     public void SetDetections(System.Collections.Generic.IReadOnlyList<DetectionResult> detections)
     {
@@ -160,6 +175,14 @@ public partial class PipelineStep : ObservableObject
         OnPropertyChanged(nameof(ExportedClipCount));
     }
 
+    public void SetFrameMatches(Services.FrameMatchesResult matches)
+    {
+        FrameMatches = matches;
+        OnPropertyChanged(nameof(FrameMatches));
+        OnPropertyChanged(nameof(HasFrameMatches));
+        OnPropertyChanged(nameof(FrameMatchCount));
+    }
+
     public bool HasDetections => Detections.Count > 0;
     public int DetectionCount => Detections.Count;
     public bool HasTranscript => Transcript != null;
@@ -172,6 +195,8 @@ public partial class PipelineStep : ObservableObject
     public int HighlightCount => Highlights?.Highlights.Count ?? 0;
     public bool HasExportedClips => ExportedClips.Count > 0;
     public int ExportedClipCount => ExportedClips.Count;
+    public bool HasFrameMatches => FrameMatches != null && FrameMatches.Matches.Count > 0;
+    public int FrameMatchCount => FrameMatches?.Matches.Count ?? 0;
     public bool HasDeviceUsed => !string.IsNullOrEmpty(DeviceUsedLabel);
 
     partial void OnDeviceUsedLabelChanged(string value) =>

@@ -54,11 +54,11 @@ public sealed class ChapterGenerator
                     RawResponse = raw,
                 };
             }
-            onStatus?.Invoke("Phi Silica returned no parseable chapters — falling back to heuristic.");
+            onStatus?.Invoke($"{lm.DisplayName} returned no parseable chapters — falling back to heuristic.");
         }
         catch (Exception ex)
         {
-            onStatus?.Invoke($"Phi Silica unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
+            onStatus?.Invoke($"{lm.DisplayName} unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
         }
 
         var fallback = HeuristicChapters(transcript, targetCount);

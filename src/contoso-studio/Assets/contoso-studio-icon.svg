@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Contoso Studio app icon.
+    Design: rounded squircle with a teal→deeper-teal gradient (brand color #0E8A7E),
+    a soft orange accent corner echoing the container badge, a centered white play
+    triangle for "video studio", and a small spark glyph that nods to on-device AI.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#14A89A"/>
+      <stop offset="100%" stop-color="#0A6F65"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E87D2F" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#E87D2F" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="4" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Base squircle -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#bg)"/>
+
+  <!-- Orange corner glow (container/AI accent) -->
+  <rect x="16" y="16" width="480" height="480" rx="96" ry="96" fill="url(#accent)"/>
+
+  <!-- Play triangle, centered, slightly nudged right for optical balance -->
+  <g filter="url(#shadow)">
+    <path d="M 196 152 L 196 360 L 376 256 Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- AI spark in the upper-right of the triangle -->
+  <g fill="#FFFFFF" opacity="0.95">
+    <path d="M 388 132
+             L 396 152
+             L 416 160
+             L 396 168
+             L 388 188
+             L 380 168
+             L 360 160
+             L 380 152 Z"/>
+    <circle cx="430" cy="110" r="6"/>
+    <circle cx="354" cy="118" r="4"/>
+  </g>
+</svg>

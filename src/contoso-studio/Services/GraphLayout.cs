@@ -75,7 +75,8 @@ public static class GraphLayout
     public static GraphLayoutResult Build(
         IReadOnlyList<MediaFile> mediaFiles,
         IReadOnlyList<PipelineStep> steps,
-        System.Func<PipelineStep, double>? nodeHeight = null)
+        System.Func<PipelineStep, double>? nodeHeight = null,
+        System.Func<PipelineStep, double>? nodeWidth = null)
     {
         var nodes = new List<GraphNode>();
 
@@ -107,13 +108,15 @@ public static class GraphLayout
             }
             double h = nodeHeight?.Invoke(step) ?? 0;
             if (h <= 0) h = DefaultRowHeight;
+            double w = nodeWidth?.Invoke(step) ?? 0;
+            if (w <= 0) w = ColumnWidth;
 
             var node = new GraphNode
             {
                 Step = step,
                 NodeId = step.StepId,
                 Layer = layer,
-                Width = ColumnWidth,
+                Width = w,
                 Height = h,
             };
             nodes.Add(node);

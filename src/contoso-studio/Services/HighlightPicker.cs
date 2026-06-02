@@ -51,11 +51,11 @@ public sealed class HighlightPicker
                     RawResponse = raw,
                 };
             }
-            onStatus?.Invoke("Phi Silica returned no parseable highlights — using heuristic fallback.");
+            onStatus?.Invoke($"{lm.DisplayName} returned no parseable highlights — using heuristic fallback.");
         }
         catch (Exception ex)
         {
-            onStatus?.Invoke($"Phi Silica unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
+            onStatus?.Invoke($"{lm.DisplayName} unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
         }
 
         var fallback = HeuristicHighlights(transcript, targetCount, targetClipSeconds);

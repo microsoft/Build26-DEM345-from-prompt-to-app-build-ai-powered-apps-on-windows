@@ -23,6 +23,7 @@ public sealed partial class PipelineViewModel : ObservableObject
     private readonly OnnxModelRunner _modelRunner = new();
     private readonly DepthEstimationRunner _depthRunner = new();
     private readonly SceneTagger _sceneTagger = new();
+    private readonly FrameSearchRunner _frameSearchRunner = new();
     private readonly WhisperRunner _whisperRunner = new();
     private readonly ChapterGenerator _chapterGenerator = new();
     private readonly ShowNotesGenerator _showNotesGenerator = new();
@@ -96,9 +97,24 @@ public sealed partial class PipelineViewModel : ObservableObject
             },
             new("detect-silence", "Detect Silence", "Find silent regions in audio (CPU DSP)", EngineType.WindowsML, "\uE74F"),
             new("smart-cut", "Smart Cut", "Trim silent regions out of media (uses Detect Silence)", EngineType.WindowsML, "\uE8C6") { Dependencies = ["detect-silence"] },
-            new("chapter-markers", "Chapter Markers", "Generate chapter timestamps from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE8FD") { Dependencies = ["transcribe"], UsesLanguageModel = true },
-            new("show-notes", "Show Notes", "Write episode summary, key takeaways and topic tags from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE7C3") { Dependencies = ["transcribe"], UsesLanguageModel = true },
-            new("highlight-picker", "Highlight Picker", "Pick the top 3 share-worthy clips from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE734") { Dependencies = ["transcribe"], UsesLanguageModel = true },
+            new("chapter-markers", "Chapter Markers", "Generate chapter timestamps from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE8FD")
+            {
+                Dependencies = ["transcribe"], UsesLanguageModel = true,
+                InputPins = [ new("transcript", "Transcript", ArtifactKind.Transcript) ],
+                OutputPins = [ new("chapters", "Chapters", ArtifactKind.Chapters) ]
+            },
+            new("show-notes", "Show Notes", "Write episode summary, key takeaways and topic tags from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE7C3")
+            {
+                Dependencies = ["transcribe"], UsesLanguageModel = true,
+                InputPins = [ new("transcript", "Transcript", ArtifactKind.Transcript) ],
+                OutputPins = [ new("notes", "Notes", ArtifactKind.Text) ]
+            },
+            new("highlight-picker", "Highlight Picker", "Pick the top 3 share-worthy clips from a transcript via an on-device language model (Phi Silica or Foundry Local)", EngineType.WindowsAI, "\uE734")
+            {
+                Dependencies = ["transcribe"], UsesLanguageModel = true,
+                InputPins = [ new("transcript", "Transcript", ArtifactKind.Transcript) ],
+                OutputPins = [ new("highlights", "Highlights", ArtifactKind.Highlights) ]
+            },
             new("caption-burn", "Burn Captions", "Burn caption text from an upstream transcript onto the video using ffmpeg + libass", EngineType.WindowsML, "\uE890")
             {
                 Dependencies = ["transcribe"],
@@ -119,6 +135,7 @@ public sealed partial class PipelineViewModel : ObservableObject
             },
             new("depth-map", "Depth Map", "Monocular depth estimation (Depth-Anything-Small) — colorized turbo heatmap side-by-side with source", EngineType.WindowsML, "\uE81E"),
             new("scene-tags", "Scene Tags", "Per-frame scene/object classification (ViT-B/16 ImageNet) — top-3 labels burned onto video", EngineType.WindowsML, "\uE8EC"),
+            new("find-frames", "Find Frames", "Search the video for a text prompt — CLIP (openai/clip-vit-base-patch16) compiled to NPU via the winml CLI ranks every sampled frame by similarity", EngineType.WindowsML, "\uE721"),
             new("upscale", "Upscale", "AI super-resolution via Windows AI", EngineType.WindowsAI, "\uE740"),
         };
 
@@ -133,6 +150,55 @@ public sealed partial class PipelineViewModel : ObservableObject
             OnPropertyChanged(nameof(PipelineSummary));
             RunAllCommand.NotifyCanExecuteChanged();
         };
+
+        // Persist imported media across launches.
+        RestoreImportedMediaFiles();
+        MediaFiles.CollectionChanged += (_, _) => SaveImportedMediaFiles();
+    }
+
+    // Setting key for the persisted list of imported media file paths.
+    private const string ImportedMediaSettingKey = "ImportedMediaPaths";
+
+    private void RestoreImportedMediaFiles()
+    {
+        try
+        {
+            var settings = Windows.Storage.ApplicationData.Current.LocalSettings;
+            if (settings.Values[ImportedMediaSettingKey] is not string serialized || string.IsNullOrEmpty(serialized))
+                return;
+
+            // Newline-delimited absolute paths. Skip any file the user has since moved/deleted.
+            var paths = serialized.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var path in paths)
+            {
+                if (!File.Exists(path)) continue;
+                if (MediaFiles.Any(m => m.FilePath == path)) continue;
+                var media = new MediaFile(path);
+                MediaFiles.Add(media);
+                // Probe metadata in background — same as fresh import.
+                _ = ProbeVideoMetadataAsync(media);
+            }
+            // Restore the "current" source selection to the first surviving file so the source card renders.
+            if (SourceFile == null && MediaFiles.Count > 0)
+                SourceFile = MediaFiles[0];
+        }
+        catch
+        {
+            // Settings/file access can fail in unpackaged or restricted contexts — silently ignore so the app still launches.
+        }
+    }
+
+    private void SaveImportedMediaFiles()
+    {
+        try
+        {
+            var settings = Windows.Storage.ApplicationData.Current.LocalSettings;
+            settings.Values[ImportedMediaSettingKey] = string.Join('\n', MediaFiles.Select(m => m.FilePath));
+        }
+        catch
+        {
+            // Best-effort persistence — never crash the UI for a settings write.
+        }
     }
 
     partial void OnSourceFileChanged(MediaFile? value)
@@ -498,22 +564,64 @@ public sealed partial class PipelineViewModel : ObservableObject
 
         IsRunning = true;
         _cts = new CancellationTokenSource();
-        StatusMessage = $"Running {step.Name}...";
 
-        // Create work directory for single step execution
+        // Build the upstream chain: every step this one transitively depends on
+        // via Inputs[].StepId (skipping the bucket/source pseudo-step), in
+        // pipeline order, ending with the requested step. Done steps are kept
+        // in the chain only to seed currentInput; they're not re-executed.
+        var chain = CollectStepChain(step);
+
         string workDir = Path.Combine(Path.GetTempPath(), "ContosoStudio", $"work_{Guid.NewGuid():N}"[..13]);
         Directory.CreateDirectory(workDir);
 
         string workFilePath = Path.Combine(workDir, SourceFile.FileName);
         File.Copy(SourceFile.FilePath, workFilePath, overwrite: true);
 
-        step.InputVideoPath ??= workFilePath;
-
         try
         {
-            await ExecuteStepAsync(step, workDir, _cts.Token);
+            string currentInput = workFilePath;
+            int execCount = 0;
+            // The user explicitly clicked Run on `step`, so it always re-executes — even if
+            // it was previously Done — so changing a setting and clicking Run "just works".
+            // Upstream Done steps still reuse their output (we only re-run upstream that
+            // hasn't completed yet, e.g. first-time runs of the chain).
+            int execTotal = chain.Count(s => s == step || s.State != PipelineStepState.Done);
+
+            foreach (var s in chain)
+            {
+                _cts.Token.ThrowIfCancellationRequested();
+
+                // Upstream that already finished — reuse its output, don't re-run.
+                // The target step (`s == step`) always re-runs so settings changes apply.
+                if (s != step && s.State == PipelineStepState.Done)
+                {
+                    if (s.OutputVideoPath != null) currentInput = s.OutputVideoPath;
+                    continue;
+                }
+
+                s.InputVideoPath = currentInput;
+                execCount++;
+                StatusMessage = execTotal > 1
+                    ? $"Running upstream {execCount}/{execTotal}: {s.Name}..."
+                    : $"Running {s.Name}...";
+
+                await ExecuteStepAsync(s, workDir, _cts.Token);
+
+                if (s.State != PipelineStepState.Done)
+                {
+                    // Upstream failed — abort the chain so the user gets a clear signal
+                    // instead of a downstream "no transcript available" skip.
+                    throw new InvalidOperationException(
+                        $"Upstream step '{s.Name}' did not finish — cannot run '{step.Name}'.");
+                }
+
+                if (s.OutputVideoPath != null) currentInput = s.OutputVideoPath;
+            }
+
             StatusMessage = $"{step.Name} complete";
-            ShowInfo($"{step.Name} finished successfully", InfoBarSeverity.Success);
+            ShowInfo(execTotal > 1
+                ? $"{step.Name} finished (ran {execTotal} step{(execTotal == 1 ? "" : "s")})"
+                : $"{step.Name} finished successfully", InfoBarSeverity.Success);
         }
         catch (OperationCanceledException)
         {
@@ -531,6 +639,42 @@ public sealed partial class PipelineViewModel : ObservableObject
             _cts?.Dispose();
             _cts = null;
         }
+    }
+
+    /// <summary>
+    /// Collects <paramref name="target"/> plus every step it transitively depends on
+    /// (via <see cref="PipelineStep.Inputs"/>), returned in pipeline order so the
+    /// caller can execute them sequentially. Pseudo-step refs (source / bucket) are
+    /// ignored; only real upstream steps are included.
+    /// </summary>
+    private List<PipelineStep> CollectStepChain(PipelineStep target)
+    {
+        var stepById = Steps.ToDictionary(s => s.StepId, s => s);
+        var visited = new HashSet<string>();
+        var result = new List<PipelineStep>();
+
+        void Visit(PipelineStep s)
+        {
+            if (!visited.Add(s.StepId)) return;
+            foreach (var input in s.Inputs.Values)
+            {
+                if (string.IsNullOrEmpty(input.StepId)) continue;
+                if (IsInputStepId(input.StepId)) continue;
+                if (stepById.TryGetValue(input.StepId, out var upstream))
+                    Visit(upstream);
+            }
+            result.Add(s);
+        }
+
+        Visit(target);
+
+        // Preserve pipeline (visual) order so chained `currentInput` reflects the
+        // user's mental model of left-to-right flow even if traversal happened
+        // in a different order.
+        var order = new Dictionary<string, int>();
+        for (int i = 0; i < Steps.Count; i++) order[Steps[i].StepId] = i;
+        result.Sort((a, b) => order[a.StepId].CompareTo(order[b.StepId]));
+        return result;
     }
 
     [RelayCommand]
@@ -620,6 +764,10 @@ public sealed partial class PipelineViewModel : ObservableObject
 
                 case "scene-tags":
                     await ExecuteSceneTagsAsync(step);
+                    break;
+
+                case "find-frames":
+                    await ExecuteFindFramesAsync(step);
                     break;
 
                 case "upscale":
@@ -719,6 +867,48 @@ public sealed partial class PipelineViewModel : ObservableObject
     {
         string inputPath = step.InputVideoPath!;
 
+        // Check transcript cache before doing any work
+        var cachedResult = _whisperRunner.TryGetCachedTranscript(
+            inputPath, step.WhisperModel, step.TranscribeLanguage, step.TranscribeTranslate);
+        if (cachedResult != null)
+        {
+            step.AppendLog($"✓ Using cached transcript ({cachedResult.Segments.Count} segments)");
+            step.StatusText = "Loaded from cache";
+            step.DeviceUsedLabel = cachedResult.DeviceUsed;
+            step.SetTranscript(cachedResult);
+
+            // Still write SRT/TXT artifacts for downstream steps
+            string srtPath2 = Path.Combine(workDir, "subtitles.srt");
+            string txtPath2 = Path.Combine(workDir, "transcript.txt");
+            await File.WriteAllTextAsync(srtPath2, BuildSrt(cachedResult));
+            await File.WriteAllTextAsync(txtPath2, cachedResult.FullText);
+            step.AppendLog($"✓ Wrote {Path.GetFileName(srtPath2)} and {Path.GetFileName(txtPath2)}");
+
+            var segmentsForArtifact2 = new System.Collections.Generic.List<(int startMs, int endMs, string text)>(cachedResult.Segments.Count);
+            foreach (var seg in cachedResult.Segments)
+                segmentsForArtifact2.Add(((int)(seg.Start * 1000), (int)(seg.End * 1000), seg.Text));
+            step.Outputs["transcript"] = new TranscriptArtifact
+            {
+                ProducingStepId = step.StepId,
+                ProducingPinId = "transcript",
+                Path = srtPath2,
+                FullText = cachedResult.FullText,
+                Language = step.TranscribeLanguage,
+                Segments = segmentsForArtifact2
+            };
+            step.Outputs["video"] = new VideoArtifact
+            {
+                ProducingStepId = step.StepId,
+                ProducingPinId = "video",
+                Path = inputPath
+            };
+            step.OutputVideoPath = inputPath;
+            step.ResultSummary =
+                $"{cachedResult.Segments.Count} segments • {cachedResult.AudioDurationSeconds:F0}s audio • cached";
+            step.Progress = 100;
+            return;
+        }
+
         // Lazy-init / reload Whisper if model size or hardware preference changed
         if (!_whisperLoaded
             || _whisperLoadedSize != step.WhisperModel
@@ -758,6 +948,10 @@ public sealed partial class PipelineViewModel : ObservableObject
             includeTimestamps: true,
             onStatus: msg => step.AppendLog(msg),
             onProgress: new Progress<double>(p => step.Progress = 20 + p * 75)); // 20-95%
+
+        // Cache the result for future runs
+        _whisperRunner.CacheTranscript(
+            inputPath, step.WhisperModel, step.TranscribeLanguage, step.TranscribeTranslate, result);
 
         step.SetTranscript(result);
         step.DeviceUsedLabel = result.DeviceUsed;
@@ -1718,6 +1912,192 @@ public sealed partial class PipelineViewModel : ObservableObject
             step.OutputVideoPath = videoPath;
             step.ResultSummary = $"{tags.Count} tags on {_sceneTagger.ActiveBackend} (render failed)";
         }
+    }
+
+    private const int FindFramesMaxCap = 600;
+
+    private async Task ExecuteFindFramesAsync(PipelineStep step)
+    {
+        string videoPath = step.InputVideoPath!;
+        string prompt = string.IsNullOrWhiteSpace(step.FrameSearchPrompt)
+            ? "a person smiling"
+            : step.FrameSearchPrompt.Trim();
+        double stride = Math.Max(0.5, step.FrameSearchStrideSeconds);
+        int topK = Math.Max(1, step.FrameSearchTopK);
+
+        // Compute frame count up-front from duration so the sampling stride is meaningful
+        // for both short clips and long-form video. We probe before extraction so the user
+        // sees the resulting frame count in the log before the (potentially long) scan.
+        double videoSeconds = await ProbeDurationSecondsAsync(videoPath);
+        int requestedFrames = videoSeconds > 0 ? (int)Math.Ceiling(videoSeconds / stride) : 60;
+        int maxFrames = Math.Clamp(requestedFrames, 8, FindFramesMaxCap);
+        // If the cap kicked in, the effective stride widens — report what we'll actually use.
+        double effectiveStride = videoSeconds > 0 && maxFrames > 1 ? videoSeconds / maxFrames : stride;
+
+        step.AppendLog("Find Frames — Windows ML (ONNX Runtime)");
+        step.AppendLog("Model: openai/clip-vit-base-patch16 (vision + text), QNN-compiled to NPU via winml CLI");
+        step.AppendLog($"Prompt: \"{prompt}\"");
+        if (requestedFrames > FindFramesMaxCap)
+            step.AppendLog($"Options: ~{videoSeconds:F0}s video, requested every {stride:F1}s → {requestedFrames} frames " +
+                           $"(capped at {FindFramesMaxCap}, effective stride {effectiveStride:F1}s), top-{topK} matches");
+        else
+            step.AppendLog($"Options: ~{videoSeconds:F0}s video, sampling every {stride:F1}s → {maxFrames} frames, top-{topK} matches");
+
+        step.StatusText = "Loading CLIP encoders...";
+        step.Progress = 4;
+        try
+        {
+            await _frameSearchRunner.InitializeAsync(s => step.AppendLog($"  {s}"));
+        }
+        catch (Exception ex)
+        {
+            step.AppendLog($"❌ CLIP load failed: {ex.Message}");
+            step.State = PipelineStepState.Error;
+            step.ResultSummary = $"Init error: {ex.Message}";
+            step.OutputVideoPath = videoPath;
+            return;
+        }
+
+        step.AppendLog($"Active backend: {_frameSearchRunner.ActiveBackend}");
+        step.DeviceUsedLabel = _frameSearchRunner.ActiveBackend;
+
+        step.StatusText = "Encoding prompt...";
+        step.Progress = 8;
+        float[] textEmbed;
+        try
+        {
+            textEmbed = await _frameSearchRunner.EmbedTextAsync(prompt);
+            step.AppendLog($"Text embedding: dim={textEmbed.Length}");
+        }
+        catch (Exception ex)
+        {
+            step.AppendLog($"❌ Text encode failed: {ex.Message}");
+            step.State = PipelineStepState.Error;
+            step.ResultSummary = $"Text encode error: {ex.Message}";
+            step.OutputVideoPath = videoPath;
+            return;
+        }
+
+        // Check if we have cached frames for this video+sampling combination.
+        var cachedFrames = _frameSearchRunner.TryGetCachedFrames(videoPath, maxFrames);
+        List<(int frameIndex, float score)> scores;
+        long totalElapsedMs;
+
+        IReadOnlyList<(int frameIndex, byte[] rgba, int width, int height)> frames;
+        if (cachedFrames != null)
+        {
+            step.AppendLog($"✓ Using {cachedFrames.Count} cached frames — skipping extraction");
+            frames = cachedFrames;
+        }
+        else
+        {
+            step.StatusText = $"Extracting {maxFrames} frames...";
+            step.AppendLog($"Extracting {maxFrames} frames from video (this can take a minute on long clips)...");
+            step.Progress = 14;
+            int lastLoggedExtract = 0;
+            var extractSw = Stopwatch.StartNew();
+            frames = await FrameOverlayRenderer.ExtractFramesAsync(videoPath, maxFrames, 640, 360,
+                onProgress: (cur, total) =>
+                {
+                    step.Progress = 14 + (double)cur / total * 6; // 14% → 20% during extract
+                    step.StatusText = $"Extracting frame {cur}/{total}...";
+                    int pctDecile = (int)(cur * 10.0 / total);
+                    if (pctDecile > lastLoggedExtract)
+                    {
+                        lastLoggedExtract = pctDecile;
+                        step.AppendLog($"  …extracted {cur}/{total} frames ({extractSw.ElapsedMilliseconds} ms)");
+                    }
+                });
+            if (frames.Count == 0)
+            {
+                step.AppendLog("⚠ No frames extracted.");
+                step.ResultSummary = "No frames available";
+                step.OutputVideoPath = videoPath;
+                return;
+            }
+            step.AppendLog($"Extracted {frames.Count} frames at 640×360 in {extractSw.ElapsedMilliseconds} ms");
+            _frameSearchRunner.CacheFrames(videoPath, maxFrames, frames);
+        }
+
+        step.StatusText = $"Embedding frames on {_frameSearchRunner.ActiveBackend}";
+        var sw = Stopwatch.StartNew();
+        var embeddings = await _frameSearchRunner.EmbedFramesAsync(videoPath, maxFrames, frames,
+            onProgress: (cur, total) =>
+            {
+                step.Progress = 20 + (double)cur / total * 60;
+                step.StatusText = $"Embedding frame {cur}/{total} on {_frameSearchRunner.ActiveBackend}";
+                _hardwareMonitor?.ReportNpuActive(50);
+            },
+            onDiagnostic: msg => step.AppendLog(msg));
+        sw.Stop();
+        totalElapsedMs = sw.ElapsedMilliseconds;
+        step.AppendLog($"Inference: {totalElapsedMs} ms for {frames.Count} frames");
+
+        scores = _frameSearchRunner.ScoreEmbeddings(textEmbed, embeddings,
+            onDiagnostic: msg => step.AppendLog(msg));
+
+        int scoredFrameCount = scores.Count;
+        double frameStrideSec = scoredFrameCount > 1 && videoSeconds > 0 ? videoSeconds / scoredFrameCount : effectiveStride;
+
+        if (scores.Count == 0)
+        {
+            step.ResultSummary = $"No similarity scores on {_frameSearchRunner.ActiveBackend}";
+            step.OutputVideoPath = videoPath;
+            return;
+        }
+
+        var ranked = scores.OrderByDescending(s => s.score).ToList();
+        var topMatches = ranked.Take(topK).ToList();
+
+        step.AppendLog("── Top matches ──");
+        var topMatchObjs = new List<FrameMatch>(topMatches.Count);
+        foreach (var m in topMatches)
+        {
+            double ts = m.frameIndex * frameStrideSec;
+            step.AppendLog($"  [{FormatTimestamp(ts)}]  score {m.score:F3}  (frame {m.frameIndex + 1})");
+            topMatchObjs.Add(new FrameMatch
+            {
+                FrameIndex = m.frameIndex,
+                Score = m.score,
+                TimestampSeconds = ts,
+            });
+        }
+
+        // No annotated render — surface matches as a clickable timestamp list on the source video.
+        step.Progress = 96;
+        step.OutputVideoPath = videoPath;
+        step.SetFrameMatches(new FrameMatchesResult
+        {
+            Prompt = prompt,
+            Matches = topMatchObjs,
+            DeviceUsed = _frameSearchRunner.ActiveBackend,
+            ElapsedMs = totalElapsedMs,
+            FramesScanned = scoredFrameCount,
+        });
+
+        var bestMatch = topMatchObjs[0];
+        step.ResultSummary =
+            $"Top match @ {FormatTimestamp(bestMatch.TimestampSeconds)} • score {bestMatch.Score:F2} • {totalElapsedMs} ms on {_frameSearchRunner.ActiveBackend}";
+    }
+
+    private static async Task<double> ProbeDurationSecondsAsync(string videoPath)
+    {
+        try
+        {
+            var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(videoPath);
+            var clip = await Windows.Media.Editing.MediaClip.CreateFromFileAsync(file);
+            return clip.OriginalDuration.TotalSeconds;
+        }
+        catch { return 0; }
+    }
+
+    private static string FormatTimestamp(double seconds)
+    {
+        if (seconds < 0 || double.IsNaN(seconds)) seconds = 0;
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.TotalHours >= 1
+            ? $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}"
+            : $"{ts.Minutes:D2}:{ts.Seconds:D2}";
     }
 
     private async Task ExecuteUpscaleAsync(PipelineStep step, string workDir)

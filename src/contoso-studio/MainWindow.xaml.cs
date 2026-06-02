@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage.Pickers;
 using VideoStudio.Controls;
@@ -46,6 +47,12 @@ public sealed partial class MainWindow : Window
 
         // Update sources list when MediaFiles collection changes
         PipelineVM.MediaFiles.CollectionChanged += OnMediaFilesCollectionChanged;
+        // If the VM restored previously-imported media before we attached the handler above,
+        // sync the sidebar + canvas now so the saved input shows up on launch.
+        if (PipelineVM.MediaFiles.Count > 0)
+        {
+            OnMediaFilesCollectionChanged(PipelineVM.MediaFiles, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        }
 
         // Hardware monitor telemetry → status bar sparklines
         _hardwareMonitor.HistoryUpdated += OnHardwareHistoryUpdated;
@@ -174,7 +181,8 @@ public sealed partial class MainWindow : Window
             var layout = VideoStudio.Services.GraphLayout.Build(
                 PipelineVM.MediaFiles,
                 PipelineVM.Steps,
-                MeasuredHeightFor);
+                MeasuredHeightFor,
+                WidthForStep);
 
             foreach (var node in layout.Nodes)
             {
@@ -199,10 +207,11 @@ public sealed partial class MainWindow : Window
                 card.DragOver += StepCard_DragOver;
                 card.Drop += StepCard_Drop;
                 card.RunStepRequested += (s, _) => PipelineVM.RunStepCommand.Execute(step);
+                card.CancelStepRequested += (s, _) => PipelineVM.StopExecutionCommand.Execute(null);
                 card.RemoveRequested += (s, _) => PipelineVM.RemoveStepCommand.Execute(step);
-                card.MoveUpRequested += (s, _) => PipelineVM.MoveStepUpCommand.Execute(step);
-                card.MoveDownRequested += (s, _) => PipelineVM.MoveStepDownCommand.Execute(step);
                 card.SizeChanged += OnStepCardSizeChanged;
+                card.SelectionRequested += OnStepCardSelectionRequested;
+                card.IsCardSelected = step.StepId == _selectedStepId;
                 card.Tag = step;
 
                 // Phase 8.8.5 — pin chip wiring
@@ -288,9 +297,252 @@ public sealed partial class MainWindow : Window
 
     // Tracks measured card heights so the next layout pass packs rows tightly when cards expand.
     private readonly System.Collections.Generic.Dictionary<VideoStudio.Models.PipelineStep, double> _stepCardActualHeight = new();
+    private bool _layoutDirtyDuringAnimation;
 
     private double MeasuredHeightFor(VideoStudio.Models.PipelineStep step) =>
         _stepCardActualHeight.TryGetValue(step, out var h) ? h : 0;
+
+    // ===== Selected card (click-to-expand) =====
+    private string? _selectedStepId;
+    private const double SelectedCardWidth = 580;
+
+    private double WidthForStep(VideoStudio.Models.PipelineStep step) =>
+        step.StepId == _selectedStepId ? SelectedCardWidth : 0; // 0 → GraphLayout uses ColumnWidth
+
+    private void OnStepCardSelectionRequested(object? sender, EventArgs e)
+    {
+        if (sender is not PipelineStepCard card || card.Step == null) return;
+        var newId = card.Step.StepId;
+        if (_selectedStepId == newId) return;
+        _selectedStepId = newId;
+        foreach (var c in StepsPanel.Children.OfType<PipelineStepCard>())
+        {
+            c.IsCardSelected = c.Step?.StepId == _selectedStepId;
+        }
+        AnimateLayoutTransition();
+    }
+
+    private bool _isAnimatingLayout;
+
+    private void AnimateLayoutTransition()
+    {
+        if (StepsPanel.Children.Count == 0) return;
+        var layout = VideoStudio.Services.GraphLayout.Build(
+            PipelineVM.MediaFiles,
+            PipelineVM.Steps,
+            MeasuredHeightFor,
+            WidthForStep);
+
+        // Remove wires; they'll be redrawn at the target positions when animation completes.
+        var paths = StepsPanel.Children.OfType<Microsoft.UI.Xaml.Shapes.Path>().ToList();
+        foreach (var p in paths) StepsPanel.Children.Remove(p);
+
+        var sb = new Storyboard();
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var duration = TimeSpan.FromMilliseconds(380);
+
+        foreach (var child in StepsPanel.Children)
+        {
+            if (child is not FrameworkElement fe) continue;
+            string? nodeId = fe.Tag switch
+            {
+                VideoStudio.Models.PipelineStep st => st.StepId,
+                string s when s == VideoStudio.ViewModels.PipelineViewModel.BucketStepId => s,
+                _ => null
+            };
+            if (nodeId == null) continue;
+            var node = layout.FindByNodeId(nodeId);
+            if (node == null) continue;
+
+            // Capture current visual state as the From value — without this, animations
+            // from NaN (unset Width) or unset Canvas attached properties snap instantly.
+            var fromLeft = Microsoft.UI.Xaml.Controls.Canvas.GetLeft(fe);
+            if (double.IsNaN(fromLeft)) fromLeft = node.X;
+            var fromTop = Microsoft.UI.Xaml.Controls.Canvas.GetTop(fe);
+            if (double.IsNaN(fromTop)) fromTop = node.Y;
+
+            AddDoubleAnim(sb, fe, "(Canvas.Left)", fromLeft, node.X, duration, ease);
+            AddDoubleAnim(sb, fe, "(Canvas.Top)", fromTop, node.Y, duration, ease);
+            if (fe is PipelineStepCard)
+            {
+                var fromWidth = double.IsNaN(fe.Width) ? fe.ActualWidth : fe.Width;
+                if (fromWidth <= 0) fromWidth = node.Width;
+                AddDoubleAnim(sb, fe, "Width", fromWidth, node.Width, duration, ease);
+            }
+        }
+
+        _isAnimatingLayout = true;
+        _layoutDirtyDuringAnimation = false;
+
+        // Live-redraw wires every frame while animation is running so they follow the cards
+        // instead of vanishing and snapping back at the end.
+        EventHandler<object>? rendering = null;
+        rendering = (_, _) => RedrawWiresLive();
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += rendering;
+
+        sb.Completed += (_, _) =>
+        {
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= rendering;
+            foreach (var child in StepsPanel.Children)
+            {
+                if (child is not FrameworkElement fe) continue;
+                string? nodeId = fe.Tag switch
+                {
+                    VideoStudio.Models.PipelineStep st => st.StepId,
+                    string s when s == VideoStudio.ViewModels.PipelineViewModel.BucketStepId => s,
+                    _ => null
+                };
+                if (nodeId == null) continue;
+                var node = layout.FindByNodeId(nodeId);
+                if (node == null) continue;
+                Microsoft.UI.Xaml.Controls.Canvas.SetLeft(fe, node.X);
+                Microsoft.UI.Xaml.Controls.Canvas.SetTop(fe, node.Y);
+                if (fe is PipelineStepCard) fe.Width = node.Width;
+            }
+            _isAnimatingLayout = false;
+            // If any card resized during the animation (logs streamed, a step completed,
+            // artifacts appeared), the SizeChanged handler will have set this flag instead
+            // of repacking mid-animation. Re-pack now so the final positions account for
+            // the new heights and cards don't overlap.
+            if (_layoutDirtyDuringAnimation)
+            {
+                _layoutDirtyDuringAnimation = false;
+                RepackCanvas();
+            }
+            // Bring the selected card into view so its expanded body fits in the viewport.
+            ScrollSelectedCardIntoView(layout);
+            // RedrawWiresLive already painted at the final positions on its last tick — no extra DrawWires call.
+        };
+        sb.Begin();
+
+        // Expand the canvas immediately so the scroller can reveal the wider card.
+        StepsPanel.Width = Math.Max(StepsPanel.Width, layout.TotalWidth);
+        StepsPanel.Height = Math.Max(StepsPanel.Height, layout.TotalHeight);
+    }
+
+    /// <summary>
+    /// After the layout animation settles, pan PipelineScroller so the currently
+    /// selected (expanded) card fits in the viewport. Adds a small margin so the
+    /// card isn't flush against the viewport edge.
+    /// </summary>
+    private void ScrollSelectedCardIntoView(VideoStudio.Services.GraphLayout.GraphLayoutResult layout)
+    {
+        if (_selectedStepId == null) return;
+        var node = layout.FindByNodeId(_selectedStepId);
+        if (node == null) return;
+
+        // Prefer the live element bounds — the expanded card body can grow taller
+        // than the layout's pre-measured height as artifacts/log content streams in.
+        double cardX = node.X, cardY = node.Y;
+        double cardW = node.Width, cardH = node.Height;
+        foreach (var child in StepsPanel.Children)
+        {
+            if (child is PipelineStepCard pc && pc.Step?.StepId == _selectedStepId)
+            {
+                cardW = pc.ActualWidth > 0 ? pc.ActualWidth : cardW;
+                cardH = pc.ActualHeight > 0 ? pc.ActualHeight : cardH;
+                break;
+            }
+        }
+
+        const double margin = 24;
+        double viewportW = PipelineScroller.ViewportWidth;
+        double viewportH = PipelineScroller.ViewportHeight;
+        if (viewportW <= 0 || viewportH <= 0) return;
+
+        double currentH = PipelineScroller.HorizontalOffset;
+        double currentV = PipelineScroller.VerticalOffset;
+        double targetH = currentH;
+        double targetV = currentV;
+
+        double cardLeft = cardX - margin;
+        double cardRight = cardX + cardW + margin;
+        if (cardRight > currentH + viewportW) targetH = cardRight - viewportW;
+        if (cardLeft < targetH) targetH = cardLeft;
+
+        double cardTop = cardY - margin;
+        double cardBottom = cardY + cardH + margin;
+        if (cardBottom > currentV + viewportH) targetV = cardBottom - viewportH;
+        if (cardTop < targetV) targetV = cardTop;
+
+        if (Math.Abs(targetH - currentH) > 0.5 || Math.Abs(targetV - currentV) > 0.5)
+            PipelineScroller.ChangeView(targetH, targetV, null);
+    }
+
+    private void RedrawWiresLive()
+    {
+        // Read current animated position from each card on the canvas, then redraw all wires.
+        var positions = new System.Collections.Generic.Dictionary<string, (double X, double Y, double W, double H)>();
+        foreach (var child in StepsPanel.Children)
+        {
+            if (child is not FrameworkElement fe) continue;
+            string? nodeId = fe.Tag switch
+            {
+                VideoStudio.Models.PipelineStep st => st.StepId,
+                string s when s == VideoStudio.ViewModels.PipelineViewModel.BucketStepId => s,
+                _ => null
+            };
+            if (nodeId == null) continue;
+            var x = Microsoft.UI.Xaml.Controls.Canvas.GetLeft(fe);
+            var y = Microsoft.UI.Xaml.Controls.Canvas.GetTop(fe);
+            if (double.IsNaN(x) || double.IsNaN(y)) continue;
+            var w = fe.ActualWidth > 0 ? fe.ActualWidth : fe.Width;
+            var h = fe.ActualHeight > 0 ? fe.ActualHeight : fe.Height;
+            if (double.IsNaN(w) || double.IsNaN(h)) continue;
+            positions[nodeId] = (x, y, w, h);
+        }
+
+        var paths = StepsPanel.Children.OfType<Microsoft.UI.Xaml.Shapes.Path>().ToList();
+        foreach (var p in paths) StepsPanel.Children.Remove(p);
+
+        foreach (var step in PipelineVM.Steps)
+        {
+            if (!positions.TryGetValue(step.StepId, out var consumer)) continue;
+            foreach (var kv in step.Inputs)
+            {
+                var refStepId = kv.Value?.StepId;
+                if (string.IsNullOrEmpty(refStepId)) continue;
+                if (!positions.TryGetValue(refStepId, out var producer)) continue;
+
+                var x1 = producer.X + producer.W;
+                var y1 = producer.Y + producer.H / 2;
+                var x2 = consumer.X;
+                var y2 = consumer.Y + consumer.H / 2;
+                var dx = Math.Max(40, (x2 - x1) / 2);
+
+                var fig = new Microsoft.UI.Xaml.Media.PathFigure
+                {
+                    StartPoint = new Windows.Foundation.Point(x1, y1),
+                    IsClosed = false,
+                };
+                fig.Segments.Add(new Microsoft.UI.Xaml.Media.BezierSegment
+                {
+                    Point1 = new Windows.Foundation.Point(x1 + dx, y1),
+                    Point2 = new Windows.Foundation.Point(x2 - dx, y2),
+                    Point3 = new Windows.Foundation.Point(x2, y2),
+                });
+                var geo = new Microsoft.UI.Xaml.Media.PathGeometry();
+                geo.Figures.Add(fig);
+
+                var path = new Microsoft.UI.Xaml.Shapes.Path
+                {
+                    Data = geo,
+                    Stroke = WireBrushFor(kv.Value!.Kind),
+                    StrokeThickness = 2,
+                };
+                Microsoft.UI.Xaml.Controls.Canvas.SetZIndex(path, -1);
+                StepsPanel.Children.Insert(0, path);
+            }
+        }
+    }
+
+    private static void AddDoubleAnim(Storyboard sb, DependencyObject target, string property, double from, double to, TimeSpan duration, EasingFunctionBase ease)
+    {
+        var anim = new DoubleAnimation { From = from, To = to, Duration = duration, EasingFunction = ease, EnableDependentAnimation = true };
+        Storyboard.SetTarget(anim, target);
+        Storyboard.SetTargetProperty(anim, property);
+        sb.Children.Add(anim);
+    }
 
     private void OnStepCardSizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -299,6 +551,15 @@ public sealed partial class MainWindow : Window
         var prev = _stepCardActualHeight.TryGetValue(step, out var p) ? p : 0;
         if (System.Math.Abs(prev - e.NewSize.Height) < 1.0) return;
         _stepCardActualHeight[step] = e.NewSize.Height;
+        // While a layout animation is running, don't snap positions — but mark the layout
+        // as dirty so the animation Completed handler re-packs after it finishes. Without
+        // this, a card that grows during the animation (e.g., logs streaming in or a step
+        // completing while another is being selected) would leave siblings overlapping it.
+        if (_isAnimatingLayout)
+        {
+            _layoutDirtyDuringAnimation = true;
+            return;
+        }
         // Re-position siblings without re-creating cards (cheap).
         RepackCanvas();
     }
@@ -309,7 +570,8 @@ public sealed partial class MainWindow : Window
         var layout = VideoStudio.Services.GraphLayout.Build(
             PipelineVM.MediaFiles,
             PipelineVM.Steps,
-            MeasuredHeightFor);
+            MeasuredHeightFor,
+            WidthForStep);
 
         // Remove old wires (Path elements) — cards stay in place.
         var paths = StepsPanel.Children.OfType<Microsoft.UI.Xaml.Shapes.Path>().ToList();

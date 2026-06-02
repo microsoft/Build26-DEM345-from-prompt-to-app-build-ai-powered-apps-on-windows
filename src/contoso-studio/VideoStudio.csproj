@@ -28,6 +28,20 @@
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
     <Content Include="Assets\Models\yolos-small.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\yolos-small.onnx')" />
     <Content Include="Assets\Models\imagenet1k-labels.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- CLIP (openai/clip-vit-base-patch16) — NPU-compiled via the winml CLI.
+         The .onnx is a tiny EPContext wrapper that points at the co-located compiled_qnn.bin,
+         so both files must travel together. Plus the BPE tokenizer assets. -->
+    <Content Include="Assets\Models\clip-vit-base-patch16\image-encoder\model.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\image-encoder\model.onnx')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\image-encoder\compiled_qnn.bin" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\image-encoder\compiled_qnn.bin')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\text-encoder\model.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\text-encoder\model.onnx')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\text-encoder\compiled_qnn.bin" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\text-encoder\compiled_qnn.bin')" />
+    <!-- CLIP OpenVINO build (Intel NPU / Core Ultra) — same shape, EPContext wrapper + co-located .bin. -->
+    <Content Include="Assets\Models\clip-vit-base-patch16\image-encoder-openvino\model.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\image-encoder-openvino\model.onnx')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\image-encoder-openvino\compiled_OpenVINOExecutionProvider.bin" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\image-encoder-openvino\compiled_OpenVINOExecutionProvider.bin')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\text-encoder-openvino\model.onnx" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\text-encoder-openvino\model.onnx')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\text-encoder-openvino\compiled_OpenVINOExecutionProvider.bin" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\text-encoder-openvino\compiled_OpenVINOExecutionProvider.bin')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\tokenizer\vocab.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\tokenizer\vocab.json')" />
+    <Content Include="Assets\Models\clip-vit-base-patch16\tokenizer\merges.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Assets\Models\clip-vit-base-patch16\tokenizer\merges.txt')" />
     <Content Include="Assets\Notebooks\*.studionb" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="tools\ffmpeg.exe" CopyToOutputDirectory="PreserveNewest" Link="tools\ffmpeg.exe" Condition="Exists('tools\ffmpeg.exe')" />
   </ItemGroup>
@@ -47,12 +61,12 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="1.1.0" />
+    <PackageReference Include="Microsoft.AI.Foundry.Local.WinML" Version="1.2.0" />
     <!-- Foundry transitively pulls these cross-platform ORT packages. We only ship Windows,
          so suppress them — they cause MSBuild copy failures on win-arm64 (missing .dll
          in the package payload). -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="*" ExcludeAssets="all" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Foundry" Version="*" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.26.0" ExcludeAssets="all" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Foundry" Version="1.26.0" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.3.1">
@@ -60,9 +74,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="OpenAI" Version="2.10.0" />
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="9.*" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1721" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.0.1" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.1.3" />
   </ItemGroup>
 
   <!--

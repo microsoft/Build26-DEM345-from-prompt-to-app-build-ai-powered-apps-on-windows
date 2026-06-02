@@ -29,8 +29,10 @@ public sealed partial class HardwareMonitor : ObservableObject, IDisposable
     private TimeSpan _lastCpuTime;
     private DateTime _lastCpuTimestamp;
 
-    // GPU measurement
-    private PerformanceCounter? _gpuCounter;
+    // GPU measurement — we collect ALL GPU engine instances (3D, Compute, Copy, Video) and
+    // sum their utilization on each tick, then clamp to 100. Picking just one engtype_3D
+    // instance misses ML/LLM workloads that run on Compute_0/Compute_1 (CUDA, DirectML).
+    private List<PerformanceCounter> _gpuCounters = new();
 
     // NPU heuristic
     private double _reportedNpuPercent;
@@ -136,7 +138,8 @@ public sealed partial class HardwareMonitor : ObservableObject, IDisposable
     {
         Stop();
         _cpuCounter?.Dispose();
-        _gpuCounter?.Dispose();
+        foreach (var c in _gpuCounters) c.Dispose();
+        _gpuCounters.Clear();
     }
 
     private void InitializeCounters()
@@ -162,17 +165,17 @@ public sealed partial class HardwareMonitor : ObservableObject, IDisposable
             _lastCpuTimestamp = DateTime.UtcNow;
         }
 
-        // GPU counter
+        // GPU counters — collect every instance so we capture 3D *and* Compute (CUDA/DML/ML).
         try
         {
-            _gpuCounter = FindGpuCounter();
-            _gpuCounter?.NextValue();
-            GpuAvailable = _gpuCounter is not null;
+            _gpuCounters = FindGpuCounters();
+            foreach (var c in _gpuCounters) c.NextValue();
+            GpuAvailable = _gpuCounters.Count > 0;
         }
         catch
         {
-            _gpuCounter?.Dispose();
-            _gpuCounter = null;
+            foreach (var c in _gpuCounters) c.Dispose();
+            _gpuCounters.Clear();
             GpuAvailable = false;
         }
 
@@ -181,27 +184,38 @@ public sealed partial class HardwareMonitor : ObservableObject, IDisposable
         MemoryTotalMB = gcInfo.TotalAvailableMemoryBytes / (1024.0 * 1024.0);
     }
 
-    private static PerformanceCounter? FindGpuCounter()
+    /// <summary>
+    /// Collect a <see cref="PerformanceCounter"/> for every GPU engine instance. Task Manager's
+    /// per-GPU utilization is effectively the max across engines; for ML workloads (CUDA, DML,
+    /// WebGPU) the activity is on <c>engtype_Compute_*</c> rather than <c>engtype_3D</c>, so
+    /// filtering to 3D-only — which the original code did — always reports 0% during inference.
+    /// We capture all instances and sum them at read time, clamped to 100.
+    /// </summary>
+    private static List<PerformanceCounter> FindGpuCounters()
     {
+        var list = new List<PerformanceCounter>();
         try
         {
             var category = new PerformanceCounterCategory("GPU Engine");
             foreach (var instance in category.GetInstanceNames())
             {
-                if (!instance.Contains("engtype_3D", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
-                counter.NextValue();
-                return counter;
+                try
+                {
+                    var counter = new PerformanceCounter("GPU Engine", "Utilization Percentage", instance);
+                    counter.NextValue();
+                    list.Add(counter);
+                }
+                catch
+                {
+                    // skip individual broken instances
+                }
             }
         }
         catch
         {
             // GPU counters not available on this system
         }
-
-        return null;
+        return list;
     }
 
     private async System.Threading.Tasks.Task PollLoopAsync(CancellationToken ct)
@@ -283,16 +297,15 @@ public sealed partial class HardwareMonitor : ObservableObject, IDisposable
 
     private double ReadGpu()
     {
-        if (_gpuCounter is null) return 0;
+        if (_gpuCounters.Count == 0) return 0;
 
-        try
+        double total = 0;
+        foreach (var c in _gpuCounters)
         {
-            return Math.Clamp(_gpuCounter.NextValue(), 0, 100);
+            try { total += c.NextValue(); }
+            catch { /* ignore individual broken counters */ }
         }
-        catch
-        {
-            return 0;
-        }
+        return Math.Clamp(total, 0, 100);
     }
 
     private double ReadNpu()

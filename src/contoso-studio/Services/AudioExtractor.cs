@@ -128,10 +128,13 @@ public static class AudioExtractor
 
     /// <summary>
     /// Probe the duration (in seconds) of a media file's audio track via ffmpeg.
+    /// ffmpeg prints the <c>Duration:</c> line to stderr as soon as it parses the file
+    /// header — so we read stderr line-by-line and kill the process the moment we have it.
+    /// Without the early-kill, <c>-f null -</c> decodes the entire file just to count
+    /// duration, which takes minutes for multi-hour videos.
     /// </summary>
     public static async Task<double> ProbeDurationSecondsAsync(string inputPath, CancellationToken ct = default)
     {
-        // Use ffmpeg with -i and parse stderr — no ffprobe needed
         var psi = new ProcessStartInfo
         {
             FileName = FfmpegPath,
@@ -144,15 +147,29 @@ public static class AudioExtractor
 
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start ffmpeg.exe");
-        var err = await proc.StandardError.ReadToEndAsync(ct);
-        await proc.WaitForExitAsync(ct);
 
-        // Look for "Duration: HH:MM:SS.ms," in stderr
-        var match = System.Text.RegularExpressions.Regex.Match(err, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
-        if (!match.Success) return 0;
-        var h = int.Parse(match.Groups[1].Value);
-        var m = int.Parse(match.Groups[2].Value);
-        var s = double.Parse(match.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
-        return h * 3600 + m * 60 + s;
+        var rx = new System.Text.RegularExpressions.Regex(@"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)");
+        double duration = 0;
+        try
+        {
+            string? line;
+            while ((line = await proc.StandardError.ReadLineAsync(ct).ConfigureAwait(false)) != null)
+            {
+                var m = rx.Match(line);
+                if (!m.Success) continue;
+                duration = int.Parse(m.Groups[1].Value) * 3600
+                         + int.Parse(m.Groups[2].Value) * 60
+                         + double.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture);
+                break;
+            }
+        }
+        finally
+        {
+            // Kill ffmpeg the moment we have the answer — don't wait for the full decode pass.
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+            try { await proc.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false); } catch { }
+        }
+
+        return duration;
     }
 }

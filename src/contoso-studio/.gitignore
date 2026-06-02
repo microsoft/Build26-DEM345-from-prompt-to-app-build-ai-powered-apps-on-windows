@@ -6,6 +6,22 @@ screenshot.png
 TestData/
 Assets/Models/*.onnx
 
+# winml pipeline intermediates — only model.onnx + compiled_qnn.bin actually ship
+Assets/Models/clip-vit-base-patch16/**/export.onnx
+Assets/Models/clip-vit-base-patch16/**/export.onnx.data
+Assets/Models/clip-vit-base-patch16/**/optimized.onnx
+Assets/Models/clip-vit-base-patch16/**/optimized.onnx.data
+Assets/Models/clip-vit-base-patch16/**/quantized.onnx
+Assets/Models/clip-vit-base-patch16/**/quantized.onnx.data
+Assets/Models/clip-vit-base-patch16/**/quantized_npu_ctx.onnx
+Assets/Models/clip-vit-base-patch16/**/quantized_npu_ctx_qnn.bin
+Assets/Models/clip-vit-base-patch16/**/quantized_npu_ctx_OpenVINOExecutionProvider.bin
+Assets/Models/clip-vit-base-patch16/**/compiled.onnx
+Assets/Models/clip-vit-base-patch16/**/export_htp_metadata.json
+Assets/Models/clip-vit-base-patch16/**/analyze_result.json
+Assets/Models/clip-vit-base-patch16/**/winml_build_config.json
+Assets/Models/clip-vit-base-patch16/build-*.log
+
 # ffmpeg static build downloaded by setup
 tools/ffmpeg.exe
 .copilot-tmp

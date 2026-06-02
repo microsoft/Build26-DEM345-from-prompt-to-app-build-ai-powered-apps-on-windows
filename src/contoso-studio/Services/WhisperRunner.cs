@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,6 +83,11 @@ public sealed class WhisperRunner : IDisposable
     private bool _disposed;
     private WhisperModelSize _loadedSize;
 
+    // Transcript cache — keyed on (fileName, fileSize, lastWriteUtc, modelSize, language, translate)
+    private static readonly string TranscriptCacheDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "ContosoStudio", "TranscriptCache");
+
     /// <summary>Human-readable backend label set after a successful load.</summary>
     public string ActiveBackend { get; private set; } = "Not loaded";
 
@@ -141,9 +148,15 @@ public sealed class WhisperRunner : IDisposable
             Log.Warn($"EP registration failed: {ex.Message}");
         }
 
-        // 4) Inspect available EPs and pick a policy based on user preference
+        // 4) Inspect available EPs and pick a policy based on user preference.
+        // Whisper-int8 (CPU-ORT fused build from khmyznikov/whisper-int8-cpu-ort.onnx) is only
+        // validated on QNN NPU + plain CPU. OpenVINO / VitisAI / DML hard-crash (0xC0000005)
+        // at session-create or first-Run with this model's int8 ops + dynamic shapes — even
+        // when the EP is just registered in the OrtEnv. So we strictly disable any non-QNN
+        // accelerator (NPU or GPU) and fall back to CPU.
         bool hasNpu = false, hasGpu = false;
         string? npuEpName = null, gpuEpName = null;
+        string? unsupportedAccelName = null;
         try
         {
             var epDevices = _ortEnv?.GetEpDevices();
@@ -152,12 +165,28 @@ public sealed class WhisperRunner : IDisposable
                 foreach (var dev in epDevices)
                 {
                     var hwType = dev.HardwareDevice.Type;
-                    if (hwType == OrtHardwareDeviceType.NPU) { hasNpu = true; npuEpName ??= dev.EpName; }
-                    else if (hwType == OrtHardwareDeviceType.GPU) { hasGpu = true; gpuEpName ??= dev.EpName; }
+                    bool isQnn = IsWhisperSupportedNpu(dev.EpName);
+                    if (hwType == OrtHardwareDeviceType.NPU)
+                    {
+                        if (isQnn) { hasNpu = true; npuEpName ??= dev.EpName; }
+                        else { unsupportedAccelName ??= dev.EpName; }
+                    }
+                    else if (hwType == OrtHardwareDeviceType.GPU)
+                    {
+                        // Whisper-int8 GPU is not validated on any EP — keep CPU.
+                        unsupportedAccelName ??= dev.EpName;
+                    }
                 }
             }
         }
         catch (Exception ex) { Log.Warn($"GetEpDevices: {ex.Message}"); }
+
+        if (unsupportedAccelName != null && !hasNpu && !hasGpu)
+        {
+            var msg = $"Detected accelerator '{unsupportedAccelName}' is not validated for Whisper-int8 — using CPU.";
+            onStatus?.Invoke($"⚠ {msg}");
+            Log.Info(msg);
+        }
 
         _sessionOptions = new SessionOptions();
 
@@ -310,6 +339,17 @@ public sealed class WhisperRunner : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Returns true if the named NPU execution provider is known to work with the
+    /// Whisper-int8 fused model. OpenVINO / VitisAI / DML are known to fail (native
+    /// crash at session-create or first inference) for this specific model.
+    /// </summary>
+    private static bool IsWhisperSupportedNpu(string? epName)
+    {
+        if (string.IsNullOrEmpty(epName)) return false;
+        return epName.StartsWith("QNN", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static (ExecutionProviderDevicePolicy? policy, string label) ResolvePolicy(
         HardwarePreference pref, bool hasNpu, bool hasGpu, string? npuEpName, string? gpuEpName)
     {
@@ -324,6 +364,115 @@ public sealed class WhisperRunner : IDisposable
             HardwarePreference.GPU => (null, "CPU (GPU not available)"),
             _ => (null, "CPU")
         };
+    }
+
+    /// <summary>
+    /// Returns a cached transcript if one exists for the given file + settings combo.
+    /// </summary>
+    public TranscriptResult? TryGetCachedTranscript(
+        string videoPath, WhisperModelSize modelSize, string language, bool translate)
+    {
+        try
+        {
+            var hash = ComputeTranscriptCacheHash(videoPath, modelSize, language, translate);
+            if (hash == null) return null;
+
+            var cachePath = Path.Combine(TranscriptCacheDir, hash + ".json");
+            if (!File.Exists(cachePath)) return null;
+
+            var json = File.ReadAllText(cachePath);
+            var dto = JsonSerializer.Deserialize<TranscriptCacheDto>(json);
+            if (dto == null) return null;
+
+            var segments = dto.Segments.Select(s => new TranscriptSegment
+            {
+                Start = s.Start,
+                End = s.End,
+                Text = s.Text
+            }).ToList();
+
+            return new TranscriptResult
+            {
+                Segments = segments,
+                FullText = dto.FullText,
+                DeviceUsed = dto.DeviceUsed + " (cached)",
+                ElapsedMs = dto.ElapsedMs,
+                AudioDurationSeconds = dto.AudioDurationSeconds
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Transcript cache read failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Saves a transcript result to disk cache.
+    /// </summary>
+    public void CacheTranscript(
+        string videoPath, WhisperModelSize modelSize, string language, bool translate,
+        TranscriptResult result)
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                var hash = ComputeTranscriptCacheHash(videoPath, modelSize, language, translate);
+                if (hash == null) return;
+
+                Directory.CreateDirectory(TranscriptCacheDir);
+                var dto = new TranscriptCacheDto
+                {
+                    FullText = result.FullText,
+                    DeviceUsed = result.DeviceUsed,
+                    ElapsedMs = result.ElapsedMs,
+                    AudioDurationSeconds = result.AudioDurationSeconds,
+                    Segments = result.Segments.Select(s => new TranscriptSegmentDto
+                    {
+                        Start = s.Start,
+                        End = s.End,
+                        Text = s.Text
+                    }).ToList()
+                };
+
+                var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions { WriteIndented = true });
+                var cachePath = Path.Combine(TranscriptCacheDir, hash + ".json");
+                File.WriteAllText(cachePath, json);
+                Log.Info($"Transcript cached to {cachePath} ({json.Length / 1024}KB)");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Transcript cache write failed: {ex.Message}");
+            }
+        });
+    }
+
+    private static string? ComputeTranscriptCacheHash(
+        string videoPath, WhisperModelSize modelSize, string language, bool translate)
+    {
+        var fi = new FileInfo(videoPath);
+        if (!fi.Exists) return null;
+
+        var keyString = $"{fi.Name}|{fi.Length}|{fi.LastWriteTimeUtc:O}|{modelSize}|{language}|{translate}";
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(keyString));
+        return Convert.ToHexString(hashBytes);
+    }
+
+    private sealed class TranscriptCacheDto
+    {
+        public string FullText { get; set; } = "";
+        public string DeviceUsed { get; set; } = "";
+        public long ElapsedMs { get; set; }
+        public double AudioDurationSeconds { get; set; }
+        public List<TranscriptSegmentDto> Segments { get; set; } = [];
+    }
+
+    private sealed class TranscriptSegmentDto
+    {
+        public double Start { get; set; }
+        public double End { get; set; }
+        public string Text { get; set; } = "";
     }
 
     /// <summary>

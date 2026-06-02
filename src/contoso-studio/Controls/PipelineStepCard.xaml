@@ -23,13 +23,6 @@
                     <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE768;"/></MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
                 <MenuFlyoutSeparator/>
-                <MenuFlyoutItem Text="Move Up" Click="OnMoveUpClick">
-                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE70E;"/></MenuFlyoutItem.Icon>
-                </MenuFlyoutItem>
-                <MenuFlyoutItem Text="Move Down" Click="OnMoveDownClick">
-                    <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE70D;"/></MenuFlyoutItem.Icon>
-                </MenuFlyoutItem>
-                <MenuFlyoutSeparator/>
                 <MenuFlyoutItem Text="Remove" Click="OnRemoveClick">
                     <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE711;" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/></MenuFlyoutItem.Icon>
                 </MenuFlyoutItem>
@@ -44,7 +37,9 @@
                     CornerRadius="7,0,0,7"
                     Background="Transparent"/>
 
-            <!-- Content — always visible, no Expander -->
+            <!-- Content — always visible, no Expander.
+                 Outer Grid hosts the StackPanel content + a floating top-right Close button. -->
+            <Grid>
             <StackPanel Margin="12,10,10,10" Spacing="8">
 
                 <!-- Phase 8.8.5 — input pin chips (populated from code-behind) -->
@@ -53,8 +48,8 @@
                             Spacing="6"
                             Visibility="Collapsed"/>
 
-                <!-- Header row: icon, name, badge, spinner, duration, action buttons -->
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+                <!-- Header row: icon, name, badge, spinner, duration. Close lives in the corner overlay. -->
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,28,0">
                     <FontIcon x:Name="StateIconElement"
                               Grid.Column="0"
                               FontSize="14"
@@ -84,25 +79,6 @@
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
-                    <Button Grid.Column="5"
-                            ToolTipService.ToolTip="Move Up"
-                            Padding="5,3" Background="Transparent" BorderThickness="0"
-                            Click="OnMoveUpClick">
-                        <FontIcon Glyph="&#xE70E;" FontSize="11"/>
-                    </Button>
-                    <Button Grid.Column="6"
-                            ToolTipService.ToolTip="Move Down"
-                            Padding="5,3" Background="Transparent" BorderThickness="0"
-                            Click="OnMoveDownClick">
-                        <FontIcon Glyph="&#xE70D;" FontSize="11"/>
-                    </Button>
-                    <Button Grid.Column="7"
-                            ToolTipService.ToolTip="Remove"
-                            Padding="5,3" Background="Transparent" BorderThickness="0"
-                            Click="OnRemoveClick">
-                        <FontIcon Glyph="&#xE711;" FontSize="11"
-                                  Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
-                    </Button>
                 </Grid>
 
                 <!-- Description -->
@@ -110,6 +86,43 @@
                            TextWrapping="Wrap"
                            FontSize="12"
                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                <!-- Inline language-model chip (LLM-powered steps only).
+                     Shows the currently-selected model so the user can see it at a
+                     glance without opening the settings flyout. -->
+                <Border x:Name="InlineLanguageModelChip"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="10"
+                        Padding="8,3"
+                        HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE99A;" FontSize="11"
+                                  Foreground="{StaticResource AccentTealBrush}"
+                                  VerticalAlignment="Center"/>
+                        <TextBlock x:Name="InlineLanguageModelText"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Inline prompt input for find-frames (collapsed for other steps).
+                     Showing the prompt right on the card surfaces what content the
+                     step is searching for, instead of hiding it behind a gear flyout. -->
+                <StackPanel x:Name="InlineFindPromptPanel"
+                            Spacing="4"
+                            Visibility="Collapsed">
+                    <TextBlock Text="Search for"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <TextBox x:Name="InlineFindPromptBox"
+                             PlaceholderText="e.g. a person smiling, a sunset, a logo on screen"
+                             TextChanged="OnInlineFindPromptChanged"
+                             GotFocus="OnInlineFindPromptGotFocus"/>
+                </StackPanel>
 
                 <!-- Result summary (visible after run) -->
                 <TextBlock x:Name="ResultSummaryText"
@@ -286,7 +299,13 @@
                                         <ComboBox x:Name="OptionsLanguageModelCombo"
                                                   Width="240"
                                                   DisplayMemberPath="DisplayName"
-                                                  SelectionChanged="OnOptionsLanguageModelChanged"/>
+                                                  SelectionChanged="OnOptionsLanguageModelChanged">
+                                            <ComboBox.ItemContainerStyle>
+                                                <Style TargetType="ComboBoxItem">
+                                                    <Setter Property="IsEnabled" Value="{Binding IsEnabled}"/>
+                                                </Style>
+                                            </ComboBox.ItemContainerStyle>
+                                        </ComboBox>
                                         <TextBlock x:Name="OptionsLanguageModelTagline"
                                                    FontSize="11" TextWrapping="Wrap"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
@@ -309,8 +328,7 @@
                                         </StackPanel>
                                     </StackPanel>
                                     <!-- Highlight Picker options -->
-                                    <StackPanel x:Name="OptionsHighlightsPanel" Spacing="10" Visibility="Collapsed">
-                                        <StackPanel Spacing="4">
+                                    <StackPanel x:Name="OptionsHighlightsPanel" Spacing="10" Visibility="Collapsed">                                        <StackPanel Spacing="4">
                                             <Grid ColumnDefinitions="*,Auto">
                                                 <TextBlock Grid.Column="0" Text="Number of highlights" FontSize="12"/>
                                                 <TextBlock Grid.Column="1" x:Name="OptionsHighlightCountValueText" FontSize="12"
@@ -336,19 +354,55 @@
                                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
                                         </StackPanel>
                                     </StackPanel>
+                                    <!-- Find Frames (CLIP) options -->
+                                    <StackPanel x:Name="OptionsFindFramesPanel" Spacing="10" Visibility="Collapsed">
+                                        <StackPanel Spacing="4">
+                                            <TextBlock Text="Search prompt" FontSize="12"/>
+                                            <TextBox x:Name="OptionsFindPromptBox"
+                                                     Width="260"
+                                                     PlaceholderText="a person smiling"
+                                                     TextChanged="OnOptionsFindPromptChanged"/>
+                                            <TextBlock Text="CLIP text encoder runs once on this prompt; vision encoder embeds every sampled frame and ranks by cosine similarity."
+                                                       FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="Sample every (seconds)" FontSize="12"
+                                                           ToolTipService.ToolTip="One frame is pulled and embedded by CLIP every N seconds of video. Smaller stride finds shorter moments but takes proportionally longer. Total frame count is capped at 600 to bound inference time on long videos."/>
+                                                <TextBlock Grid.Column="1" x:Name="OptionsFindFramesValueText" FontSize="12"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="OptionsFindFramesSlider"
+                                                    Minimum="1" Maximum="30" StepFrequency="1" SmallChange="1" LargeChange="5"
+                                                    Width="260"
+                                                    ValueChanged="OnOptionsFindFramesChanged"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="4">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="Top matches to highlight" FontSize="12"/>
+                                                <TextBlock Grid.Column="1" x:Name="OptionsFindTopKValueText" FontSize="12"
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                                            </Grid>
+                                            <Slider x:Name="OptionsFindTopKSlider"
+                                                    Minimum="1" Maximum="20" StepFrequency="1" SmallChange="1" LargeChange="2"
+                                                    Width="260"
+                                                    ValueChanged="OnOptionsFindTopKChanged"/>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </Flyout>
                         </Button.Flyout>
                     </Button>
-                    <Button Grid.Column="2"
+                    <Button x:Name="RunStepButton" Grid.Column="2"
                             Padding="10,6" CornerRadius="4"
                             Click="OnRunStepClick"
                             Background="{StaticResource AccentTealBrush}"
                             Foreground="White" BorderThickness="0"
                             VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="&#xE768;" FontSize="12"/>
-                            <TextBlock Text="Run Step" FontSize="12"/>
+                            <FontIcon x:Name="RunStepButtonIcon" Glyph="&#xE768;" FontSize="12"/>
+                            <TextBlock x:Name="RunStepButtonText" Text="Run Step" FontSize="12"/>
                         </StackPanel>
                     </Button>
                 </Grid>
@@ -418,6 +472,13 @@
                                     <TextBlock x:Name="TabClipsText" Text="Clips" FontSize="12"/>
                                 </StackPanel>
                             </ToggleButton>
+                            <ToggleButton x:Name="TabMatches" Click="OnTabClick"
+                                          Padding="12,6" MinWidth="0" Visibility="Collapsed">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE721;" FontSize="12"/>
+                                    <TextBlock x:Name="TabMatchesText" Text="Matches" FontSize="12"/>
+                                </StackPanel>
+                            </ToggleButton>
                             <ToggleButton x:Name="TabLogs" Click="OnTabClick"
                                           Padding="12,6" MinWidth="0">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -470,7 +531,79 @@
                         </Border>
                     </Grid>
 
-                    <!-- Detections tab -->
+                    <!-- Matches tab — clickable timestamp list with inline seekable player (find-frames) -->
+                    <Grid x:Name="MatchesPane" Visibility="Collapsed">
+                        <StackPanel Spacing="8">
+                            <TextBlock x:Name="MatchesSummary"
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       TextWrapping="Wrap"/>
+                            <Border CornerRadius="4"
+                                    Background="Black"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    HorizontalAlignment="Stretch">
+                                <MediaPlayerElement x:Name="MatchesPlayer"
+                                                    AreTransportControlsEnabled="True"
+                                                    AutoPlay="False"
+                                                    HorizontalAlignment="Stretch"
+                                                    MaxHeight="260"
+                                                    Stretch="Uniform">
+                                    <MediaPlayerElement.TransportControls>
+                                        <MediaTransportControls IsCompact="True"
+                                                                IsZoomButtonVisible="False"
+                                                                IsFastForwardButtonVisible="False"
+                                                                IsFastRewindButtonVisible="False"
+                                                                IsSkipBackwardButtonVisible="False"
+                                                                IsSkipForwardButtonVisible="False"
+                                                                IsPlaybackRateButtonVisible="False"
+                                                                IsRepeatButtonVisible="False"/>
+                                    </MediaPlayerElement.TransportControls>
+                                </MediaPlayerElement>
+                            </Border>
+                            <TextBlock Text="Top matches — click a timestamp to jump to that moment"
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="Scores are CLIP cosine similarity (0–1, higher = better match). Typical good matches are 0.20–0.35 for natural-language prompts."
+                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                       TextWrapping="Wrap"/>
+                            <ListView x:Name="MatchesList"
+                                      SelectionMode="Single"
+                                      IsItemClickEnabled="True"
+                                      ItemClick="OnMatchItemClick"
+                                      MaxHeight="240"
+                                      Background="{ThemeResource ControlFillColorTertiaryBrush}"
+                                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                      BorderThickness="1"
+                                      CornerRadius="4">
+                                <ListView.ItemContainerStyle>
+                                    <Style TargetType="ListViewItem">
+                                        <Setter Property="Padding" Value="10,6"/>
+                                        <Setter Property="MinHeight" Value="0"/>
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate xmlns:svc="using:VideoStudio.Services">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <FontIcon Grid.Column="0" Glyph="&#xE768;" FontSize="12"
+                                                      Foreground="{StaticResource AccentTealBrush}"
+                                                      VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding TimestampLabel}"
+                                                       FontFamily="Consolas"
+                                                       VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding ScoreLabel}"
+                                                       Style="{ThemeResource CaptionTextBlockStyle}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Grid>
                     <Grid x:Name="DetectionsPane" Visibility="Collapsed">
                         <StackPanel Spacing="6">
                             <TextBlock x:Name="DetectionsSummary"
@@ -838,6 +971,23 @@
                 </Expander>
 
             </StackPanel>
+
+            <!-- Floating close button — top-right corner, more discoverable than a tiny inline X -->
+            <Button x:Name="CloseCornerButton"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,6,8,0"
+                    Width="28" Height="28"
+                    Padding="0"
+                    CornerRadius="14"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    ToolTipService.ToolTip="Remove step"
+                    Click="OnRemoveClick">
+                <FontIcon Glyph="&#xE711;" FontSize="14"
+                          Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+            </Button>
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

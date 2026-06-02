@@ -27,7 +27,7 @@ plainText: true
 > Nikola Metulev, 
 > Software Engineer
 
-+++ layout = "center", notes = "One line. Set the frame. The whole talk is about building and iterating on real Windows apps with agents."
++++ layout = "center", notes = "One line. Set the frame. The whole talk is about building and iterating on real Windows apps with agents.", hidden = "true"
 
 # Agenda
 
@@ -37,13 +37,13 @@ plainText: true
 @click
 ## Act 2 - Make it real with AI platform integrations
 
-+++ layout = "center", notes = "The first prompt. Generic video studio sample-app shell."
++++ layout = "center", notes = "The first prompt. Generic video studio sample-app shell.", hidden = "true"
 
 ![era-prebrand](contoso-studio-journey/img/era-prebrand-loaded.png){width=95%, height=75%}
 
 > i was thinking of building a media application that uses a combination of ml models and media processing in containers… could I ask you to think about some realistic things we could do for the container side?
 
-+++ layout = "center", notes = "Iterating on layout — first commit."
++++ layout = "center", notes = "Iterating on layout — first commit.", hidden = "true"
 
 ![era-firstcommit](contoso-studio-journey/img/era-firstcommit-loaded.png){width=95%, height=75%}
 
@@ -51,27 +51,31 @@ plainText: true
 
 > can we have a nice preview/live playback… the titlebar is broken… nice drag and drop of effects… the panes need more separation. can we move things around — sources top, effects bottom, full progress on the right…
 
-+++ layout = "center", notes = "New UI direction: notebook for video processing."
++++ layout = "center", notes = "New UI direction: notebook for video processing.", hidden = "true"
 
 ![era-titlebar](contoso-studio-journey/img/era-05-titlebar-actions.png){width=95%, height=75%}
 
 > I'm not excited about this. could we redo the ui and try a thing like a Jupiter notebook, but for video processing? Build your own pipeline with steps you can add, remove, move around, and see input/output directly inline.
 
-+++ layout = "center", notes = "YOLO ONNX inference on the NPU via Windows ML + QNN."
+> let's try to get the yolo effect working and please use the ui-testing skill to debug until it works.
+
++++ layout = "center", notes = "YOLO ONNX inference on the NPU via Windows ML + QNN.", hidden = "true"
 
 ![era-npu](contoso-studio-journey/img/era-06-always-expanded-cards.png){width=95%, height=75%}
 
 > we need to make this as real as possible. let's try to get the yolo effect working and please use the ui-testing skill to debug until it works.
 
-+++ layout = "center", notes = "Switching to a DAG — outputs lead to multiple inputs."
++++ layout = "center", notes = "Switching to a DAG — outputs lead to multiple inputs.", hidden = "true"
 
 ![era-dag](contoso-studio-journey/img/era-08-dag-loaded.png){width=95%, height=75%}
 
-> the linear flow doesn't make sense - let's rethink this to be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs? 
+> the linear flow doesn't make sense - let's rethink this to be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs?
 
 +++ layout = "center", notes = "Pluggable LLM backend — Phi Silica on the NPU; Foundry Local for anything else.", hidden = "true"
 
 ![era-phi-silica](contoso-studio-journey/img/era-09-phi-silica.png){width=95%, height=75%}
+
+> the linear flow doesn't make sense - let's rethink this to be an actual tree where outputs lead to multiple inputs into effects which can take multiple inputs?
 
 > for the effects that depend on phi silica, let's add a way to change the model to use things like foundry local so it can be configured?
 
@@ -104,6 +108,7 @@ plainText: true
 - stack traces, debug output
 - lint
 - interact with app
+- optimize models
 
 @column
 
@@ -117,29 +122,25 @@ plainText: true
 - `winapp run --debug-output`
 - Roslyn analyzers
 - `winapp ui`
+- `winml` cli
 
-+++
++++ spacing = "1", hidden = "true"
 
 # Benchmarking our winui-dev agent
-##aka.ms/winui-skills
+## aka.ms/winui-skills
 
-LLMs are so good now, they can brute force any prompt, but it comes at a cost.
-
-@click
-We measure and try to optimize for:
-* token usage
-* time
-* code quality
-* ui quality
-* functionality
-* scenario specific requirements
-
-Our goal is to enable agents to build WinUI apps end to end, and to minimize token usage. 
+* Top LLMs can brute force any prompt, but it comes at a cost.
 
 @click
-##We have decreased token usage by up to 70% over our initial benchmarks.
+* We measure and try to optimize for token usage, time, code quality, ui quality, functionality, scenario specific requirements
 
-+++ spacing = "1", notes = "1 min. The APIs are what make this real. Name the platform pieces actually powering Contoso Studio."
+@click
+* Our goal is to enable agents to build WinUI apps end to end, and to minimize token usage. 
+
+@click
+* We have decreased token usage by up to 70% over our initial benchmarks.
+
++++ spacing = "1", notes = "1 min. The APIs are what make this real. Name the platform pieces actually powering Contoso Studio.", hidden = "true"
 
 # What makes the app real
 
@@ -148,20 +149,16 @@ Our goal is to enable agents to build WinUI apps end to end, and to minimize tok
 @click
 - **Windows App SDK** and **WinUI** — platform integrations and native Windows UI
 @click
-- **Windows ML** — local models (Whisper, silence detection, classifiers)
+- **Windows ML** — local models (CLIP, Whisper, silence detection, classifiers)
 @click
 - **Windows AI APIs** — text intelligence, image, summarization
 @click
 - **Foundry Local** — local LLMs on the same box
 
-@click
-@color(cyan)
-> Local-first. Hardware-aware. Native.
-
-+++ spacing = "1", notes = "While the prompt runs — walk the WinML CLI flow. This is the technical credibility moment."
++++ spacing = "1", notes = "While the prompt runs — walk the WinML CLI flow. This is the technical credibility moment.", hidden = "true"
 
 # WinML CLI
-##aka.ms/[TODO LINK]
+## aka.ms/[TODO LINK]
 
 @click
 - Pick a model
@@ -174,7 +171,7 @@ Our goal is to enable agents to build WinUI apps end to end, and to minimize tok
 @color(cyan)
 > Model  →  optimized  →  pipeline effect.
 
-+++ spacing = "1"
++++ spacing = "1", hidden = "true"
 
 # Recap
 
@@ -195,7 +192,7 @@ Our goal is to enable agents to build WinUI apps end to end, and to minimize tok
 @color(cyan)
 > Windows shortens the path from prompt to product.
 
-+++ layout = "center", notes = "ONE MORE THING. We're on a device that can run big local LLMs. Use them with the skills to do things completely offline. Demo: UI-test the app fully offline."
++++ layout = "center", notes = "ONE MORE THING. We're on a device that can run big local LLMs. Use them with the skills to do things completely offline. Demo: UI-test the app fully offline.", hidden = "true"
 
 # One more thing
 
@@ -210,3 +207,5 @@ Visit `aka.ms/build/evals` or scan the QR code to fill out a session survey
 
 ## aka.ms/winui-skills
 ## aka.ms/winappcli
+## aka.ms/winml
+## aka.ms/winmlcli

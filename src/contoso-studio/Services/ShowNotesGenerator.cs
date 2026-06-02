@@ -52,11 +52,11 @@ public sealed class ShowNotesGenerator
                     RawResponse = raw,
                 };
             }
-            onStatus?.Invoke("Phi Silica returned empty notes — falling back to heuristic.");
+            onStatus?.Invoke($"{lm.DisplayName} returned empty notes — falling back to heuristic.");
         }
         catch (Exception ex)
         {
-            onStatus?.Invoke($"Phi Silica unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
+            onStatus?.Invoke($"{lm.DisplayName} unavailable ({ex.GetType().Name}: {ex.Message}). Using heuristic fallback.");
         }
 
         // Heuristic fallback.

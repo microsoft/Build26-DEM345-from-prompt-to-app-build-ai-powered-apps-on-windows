@@ -22,7 +22,8 @@ public static class FrameOverlayRenderer
     /// because Windows.Media.Editing requires STA.
     /// </summary>
     public static async Task<List<(int frameIndex, byte[] rgba, int width, int height)>> ExtractFramesAsync(
-        string videoPath, int maxFrames, int targetWidth = 640, int targetHeight = 360)
+        string videoPath, int maxFrames, int targetWidth = 640, int targetHeight = 360,
+        Action<int, int>? onProgress = null)
     {
         var frames = new List<(int, byte[], int, int)>();
         try
@@ -58,6 +59,7 @@ public static class FrameOverlayRenderer
                 {
                     Log.Warn($"FrameOverlay: extract frame {i} failed: {ex.Message}");
                 }
+                onProgress?.Invoke(i + 1, maxFrames);
             }
         }
         catch (Exception ex)
@@ -264,6 +266,116 @@ public static class FrameOverlayRenderer
         {
             onStatus?.Invoke($"Compose failed: {ex.Message}");
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Builds an MP4 from per-frame CLIP similarity scores. Every sampled frame appears
+    /// in the output; matches above <paramref name="matchThreshold"/> get a labelled border
+    /// + score badge to make hits jump out. Top matches additionally get a "★ MATCH" callout.
+    /// </summary>
+    public static async Task<string?> RenderFindFramesVideoAsync(
+        string sourceVideoPath,
+        IReadOnlyList<(int frameIndex, byte[] rgba, int width, int height)> sourceFrames,
+        IReadOnlyList<(int frameIndex, float score)> scoresIn,
+        IReadOnlyCollection<int> topMatchFrameIndices,
+        string prompt,
+        float matchThreshold,
+        string outputVideoPath,
+        Action<string>? onStatus = null)
+    {
+        if (sourceFrames.Count == 0) return null;
+        string tempDir = Path.Combine(Path.GetTempPath(), "ContosoStudio",
+            "find_frames_" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var device = CanvasDevice.GetSharedDevice();
+            var savedPaths = new List<string>();
+            var scoreByFrame = new Dictionary<int, float>();
+            foreach (var s in scoresIn) scoreByFrame[s.frameIndex] = s.score;
+            var topSet = new HashSet<int>(topMatchFrameIndices);
+
+            var promptFormat = new CanvasTextFormat
+            {
+                FontFamily = "Segoe UI",
+                FontSize = 18,
+                FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 }
+            };
+            var scoreFormat = new CanvasTextFormat
+            {
+                FontFamily = "Segoe UI",
+                FontSize = 22,
+                FontWeight = new Windows.UI.Text.FontWeight { Weight = 700 }
+            };
+
+            for (int i = 0; i < sourceFrames.Count; i++)
+            {
+                var (idx, rgba, fw, fh) = sourceFrames[i];
+                onStatus?.Invoke($"Rendering find-frames frame {i + 1}/{sourceFrames.Count}");
+
+                using var srcBitmap = CanvasBitmap.CreateFromBytes(device, rgba, fw, fh,
+                    DirectXPixelFormat.R8G8B8A8UIntNormalized);
+                using var rt = new CanvasRenderTarget(device, fw, fh, 96);
+                using (var ds = rt.CreateDrawingSession())
+                {
+                    ds.DrawImage(srcBitmap);
+
+                    float score = scoreByFrame.TryGetValue(idx, out var s) ? s : 0f;
+                    bool isMatch = score >= matchThreshold;
+                    bool isTop = topSet.Contains(idx);
+
+                    // Prompt strip along the top
+                    var stripColor = Windows.UI.Color.FromArgb(180, 14, 138, 126);
+                    ds.FillRectangle(0, 0, fw, 32, stripColor);
+                    using (var ptLayout = new CanvasTextLayout(device, $"🔍  {prompt}", promptFormat,
+                        fw - 24, 32))
+                    {
+                        ds.DrawTextLayout(ptLayout, 12, 4, Windows.UI.Color.FromArgb(255, 255, 255, 255));
+                    }
+
+                    if (isMatch || isTop)
+                    {
+                        var borderColor = isTop
+                            ? Windows.UI.Color.FromArgb(255, 232, 125, 47)   // container orange — top hit
+                            : Windows.UI.Color.FromArgb(255, 14, 138, 126);  // teal — above threshold
+                        // 6-px border
+                        ds.DrawRectangle(3, 3, fw - 6, fh - 6, borderColor, 6);
+                    }
+
+                    // Score badge bottom-right
+                    string scoreText = isTop ? $"★ {score:F2}" : $"{score:F2}";
+                    using (var sLayout = new CanvasTextLayout(device, scoreText, scoreFormat,
+                        float.PositiveInfinity, float.PositiveInfinity))
+                    {
+                        float bw = (float)sLayout.LayoutBounds.Width + 18;
+                        float bh = (float)sLayout.LayoutBounds.Height + 8;
+                        float bx = fw - bw - 14;
+                        float by = fh - bh - 14;
+                        var badge = isTop
+                            ? Windows.UI.Color.FromArgb(220, 232, 125, 47)
+                            : isMatch
+                                ? Windows.UI.Color.FromArgb(220, 14, 138, 126)
+                                : Windows.UI.Color.FromArgb(160, 0, 0, 0);
+                        ds.FillRectangle(bx, by, bw, bh, badge);
+                        ds.DrawTextLayout(sLayout, bx + 9, by + 3,
+                            Windows.UI.Color.FromArgb(255, 255, 255, 255));
+                    }
+                }
+
+                string outPath = Path.Combine(tempDir, $"find_{i:D4}.png");
+                using (var stream = File.Create(outPath))
+                using (var ras = stream.AsRandomAccessStream())
+                    await rt.SaveAsync(ras, CanvasBitmapFileFormat.Png);
+                savedPaths.Add(outPath);
+            }
+
+            return await ComposeFramesIntoMp4Async(sourceVideoPath, savedPaths, outputVideoPath, onStatus);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
         }
     }
 
