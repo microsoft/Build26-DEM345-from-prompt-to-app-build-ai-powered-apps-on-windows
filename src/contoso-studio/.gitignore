@@ -6,7 +6,14 @@ screenshot.png
 TestData/
 Assets/Models/*.onnx
 
-# winml pipeline intermediates — only model.onnx + compiled_qnn.bin actually ship
+# compiled model binaries (too large for git — rebuild locally)
+Assets/Models/clip-vit-base-patch16/**/compiled_qnn.bin
+Assets/Models/clip-vit-base-patch16/**/compiled_OpenVINOExecutionProvider.bin
+
+# bundled NuGet packages
+packages/*.nupkg
+
+# winml pipeline intermediates
 Assets/Models/clip-vit-base-patch16/**/export.onnx
 Assets/Models/clip-vit-base-patch16/**/export.onnx.data
 Assets/Models/clip-vit-base-patch16/**/optimized.onnx
